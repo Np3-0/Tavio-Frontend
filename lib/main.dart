@@ -1,122 +1,207 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:restaurantfinder/utils/app_colors.dart';
+import 'package:restaurantfinder/utils/permissions.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+void main() => runApp(const NavigationBarApp());
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class NavigationBarApp extends StatelessWidget {
+  const NavigationBarApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
-    );
+    return const MaterialApp(home: NavigationExample());
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class NavigationExample extends StatefulWidget {
+  const NavigationExample({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<NavigationExample> createState() => _NavigationExampleState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _NavigationExampleState extends State<NavigationExample> {
+  int currentPageIndex = 0;
+  bool isCheckingPermissions = false;
+  String permissionSummary = 'Pending permission check...';
 
-  void _incrementCounter() {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _runPermissionCheck();
+    });
+  }
+
+  Future<void> _runPermissionCheck() async {
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      isCheckingPermissions = true;
+      permissionSummary = 'Checking location, voice, camera, and photos...';
+    });
+
+    final statuses = await requestAppPermissions();
+    if (!mounted) {
+      return;
+    }
+
+    final missing = statuses.entries
+      .where((entry) => entry.value != PermissionStatus.granted)
+        .map((entry) => entry.key.toString().split('.').last)
+        .toList();
+
+    setState(() {
+      isCheckingPermissions = false;
+      permissionSummary = missing.isEmpty
+          ? 'All requested permissions granted.'
+          : 'Missing: ${missing.join(', ')}';
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    final ThemeData theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: const Text('Restaurant Finder', style: TextStyle(color: AppColors.Alabaster)),
+        backgroundColor: AppColors.Onyx,
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+      bottomNavigationBar: NavigationBar(
+        onDestinationSelected: (int index) {
+          setState(() {
+            currentPageIndex = index;
+          });
+        },
+        indicatorColor: AppColors.Ocean,
+        selectedIndex: currentPageIndex,
+        destinations: const <Widget>[
+          NavigationDestination(
+            selectedIcon: Icon(Icons.home, color: AppColors.Alabaster),
+            icon: Icon(Icons.home_outlined, color: AppColors.Onyx),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            selectedIcon: Badge(
+              child: Icon(Icons.notifications_sharp, color: AppColors.Alabaster),
             ),
-          ],
+            icon: Badge(
+              child: Icon(Icons.notifications_sharp, color: AppColors.Onyx),
+            ),
+            label: 'Notifications',
+          ),
+          NavigationDestination(
+            selectedIcon: Badge(
+              label: Text('2'),
+              child: Icon(Icons.messenger_sharp, color: AppColors.Alabaster),
+            ),
+            icon: Badge(
+              label: Text('2'),
+              child: Icon(Icons.messenger_sharp, color: AppColors.Onyx),
+            ),
+            label: 'Messages',
+          ),
+        ],
+      ),
+      body: <Widget>[
+        /// Home page
+        Card(
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          margin: const EdgeInsets.all(8.0),
+          child: SizedBox.expand(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Text('Home page', style: theme.textTheme.titleLarge),
+                  const SizedBox(height: 12),
+                  Text(
+                    permissionSummary,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: isCheckingPermissions ? null : _runPermissionCheck,
+                    child: Text(
+                      isCheckingPermissions
+                          ? 'Checking permissions...'
+                          : 'Request permissions again',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
+
+        /// Notifications page
+        const Padding(
+          padding: EdgeInsets.all(8.0),
+          child: Column(
+            children: <Widget>[
+              Card(
+                child: ListTile(
+                  leading: Icon(Icons.notifications_sharp),
+                  title: Text('Notification 1'),
+                  subtitle: Text('This is a notification'),
+                ),
+              ),
+              Card(
+                child: ListTile(
+                  leading: Icon(Icons.notifications_sharp),
+                  title: Text('Notification 2'),
+                  subtitle: Text('This is a notification'),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        /// Messages page
+        ListView.builder(
+          reverse: true,
+          itemCount: 2,
+          itemBuilder: (BuildContext context, int index) {
+            if (index == 0) {
+              return Align(
+                alignment: Alignment.centerRight,
+                child: Container(
+                  margin: const EdgeInsets.all(8.0),
+                  padding: const EdgeInsets.all(8.0),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                  child: Text(
+                    'Hello',
+                    style: theme.textTheme.bodyLarge!.copyWith(
+                      color: theme.colorScheme.onPrimary,
+                    ),
+                  ),
+                ),
+              );
+            }
+            return Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                margin: const EdgeInsets.all(8.0),
+                padding: const EdgeInsets.all(8.0),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+                child: Text(
+                  'Hi!',
+                  style: theme.textTheme.bodyLarge!.copyWith(
+                    color: theme.colorScheme.onPrimary,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ][currentPageIndex],
     );
   }
 }
