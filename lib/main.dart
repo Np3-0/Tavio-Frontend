@@ -76,32 +76,23 @@ class _NavigationExampleState extends State<NavigationExample> {
         selectedIndex: currentPageIndex,
         destinations: const <Widget>[
           NavigationDestination(
-            selectedIcon: Icon(Icons.home, color: AppColors.Alabaster),
-            icon: Icon(Icons.home_outlined, color: AppColors.Onyx),
-            label: 'Home',
+            selectedIcon: Icon(Icons.location_pin, color: AppColors.Alabaster),
+            icon: Icon(Icons.location_pin, color: AppColors.Onyx),
+            label: 'Find',
           ),
           NavigationDestination(
-            selectedIcon: Badge(
-              child: Icon(Icons.notifications_sharp, color: AppColors.Alabaster),
-            ),
-            icon: Badge(
-              child: Icon(Icons.notifications_sharp, color: AppColors.Onyx),
-            ),
-            label: 'Notifications',
+            selectedIcon: Icon(Icons.perm_phone_msg, color: AppColors.Alabaster),
+            icon: Icon(Icons.perm_phone_msg, color: AppColors.Onyx),
+            label: 'Chat',
           ),
           NavigationDestination(
-            selectedIcon: Badge(
-              label: Text('2'),
-              child: Icon(Icons.messenger_sharp, color: AppColors.Alabaster),
-            ),
-            icon: Badge(
-              label: Text('2'),
-              child: Icon(Icons.messenger_sharp, color: AppColors.Onyx),
-            ),
-            label: 'Messages',
+            selectedIcon: Icon(Icons.settings, color: AppColors.Alabaster),
+            icon: Icon(Icons.settings, color: AppColors.Onyx),
+            label: 'Settings',
           ),
         ],
       ),
+
       body: <Widget>[
         /// Home page
         Card(
@@ -110,27 +101,44 @@ class _NavigationExampleState extends State<NavigationExample> {
           margin: const EdgeInsets.all(8.0),
           child: SizedBox.expand(
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(24.0),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.start,
                 children: <Widget>[
-                  Text('Home page', style: theme.textTheme.titleLarge),
+                  Text('Restaurant Finder', style: theme.textTheme.titleLarge),
                   const SizedBox(height: 12),
                   Text(
-                    permissionSummary,
-                    textAlign: TextAlign.center,
+                    'Find local restaurants in your area.',
+                    style: theme.textTheme.titleMedium,
                   ),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: isCheckingPermissions ? null : _runPermissionCheck,
-                    child: Text(
-                      isCheckingPermissions
-                          ? 'Checking permissions...'
-                          : 'Request permissions again',
-                    ),
+                  const SizedBox(height: 18),
+                  SearchBar(
+                    hintText: 'Search restaurants...',
+                    leading: Icon(Icons.search),
+                    onChanged: (value) {},
+                  ),
+                  const SizedBox(height: 48),
+                  Text('Restaurants near you', style: theme.textTheme.titleMedium),
+                  Expanded(
+                    child: ListView(
+                      children: const <Widget>[
+                        Card(child: ListTile(
+                          leading: Icon(Icons.dining, color: AppColors.Ocean),
+                          title: Text('Food Place 1'),
+                          subtitle: Text('Food Type, distance away'),
+                        )),
+                        const SizedBox(height: 12),
+                        Card(child: ListTile(
+                          leading: Icon(Icons.dining, color: AppColors.Ocean),
+                          title: Text('Food Place 2'),
+                          subtitle: Text('Food Type, distance away'),
+                        )),
+                        const SizedBox(height: 12),
+                      ],
+                    )
                   ),
                 ],
-              ),
+              )
             ),
           ),
         ),
