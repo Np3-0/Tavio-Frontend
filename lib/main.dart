@@ -127,13 +127,13 @@ class _NavigationExampleState extends State<NavigationExample> {
                           title: Text('Food Place 1'),
                           subtitle: Text('Food Type, distance away'),
                         )),
-                        const SizedBox(height: 12),
+                        SizedBox(height: 12),
                         Card(child: ListTile(
                           leading: Icon(Icons.dining, color: AppColors.Ocean),
                           title: Text('Food Place 2'),
                           subtitle: Text('Food Type, distance away'),
                         )),
-                        const SizedBox(height: 12),
+                        SizedBox(height: 12),
                       ],
                     )
                   ),
@@ -143,30 +143,131 @@ class _NavigationExampleState extends State<NavigationExample> {
           ),
         ),
 
-        /// Notifications page
-        const Padding(
-          padding: EdgeInsets.all(8.0),
+        /// Chat page
+        /// Chat page
+        Padding(
+          padding: const EdgeInsets.all(8.0),
           child: Column(
             children: <Widget>[
-              Card(
-                child: ListTile(
-                  leading: Icon(Icons.notifications_sharp),
-                  title: Text('Notification 1'),
-                  subtitle: Text('This is a notification'),
-                ),
+              const SizedBox(height: 24),
+              Text('Chat', style: theme.textTheme.titleLarge),
+              const SizedBox(height: 16),
+              Text(
+                'Voice-chat with our AI-assistant.',
+                style: theme.textTheme.bodyLarge,
               ),
-              Card(
-                child: ListTile(
-                  leading: Icon(Icons.notifications_sharp),
-                  title: Text('Notification 2'),
-                  subtitle: Text('This is a notification'),
+              const SizedBox(height: 16),
+              Expanded(
+                child: Card(
+                  elevation: 0,
+                  shadowColor: Colors.transparent,
+                  margin: const EdgeInsets.all(8.0),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      children: <Widget>[
+                        Expanded(
+                          child: ListView.builder(
+                            reverse: true,
+                            itemCount: 4,
+                            itemBuilder: (BuildContext context, int index) {
+                              if (index % 2 == 1) {
+                                return Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Container(
+                                    margin: const EdgeInsets.all(8.0),
+                                    padding: const EdgeInsets.all(8.0),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.Ocean,
+                                      borderRadius: BorderRadius.circular(8.0),
+                                    ),
+                                    child: Text(
+                                      'Hello',
+                                      style: theme.textTheme.bodyLarge!.copyWith(
+                                        color: AppColors.Alabaster,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }
+                              return Align(
+                                alignment: Alignment.centerLeft,
+                                child: Container(
+                                  margin: const EdgeInsets.all(8.0),
+                                  padding: const EdgeInsets.all(8.0),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.Ocean,
+                                    borderRadius: BorderRadius.circular(8.0),
+                                  ),
+                                  child: Text(
+                                    'Hi!',
+                                    style: theme.textTheme.bodyLarge!.copyWith(
+                                      color: AppColors.Alabaster,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+
+                        SizedBox(height: 12),
+                        Row(
+                          children: <Widget>[
+                            Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.Ocean,
+                                shape: BoxShape.circle,
+                              ),
+                              child: IconButton(
+                                onPressed: () {
+                                  // add voice input
+                                },
+                                icon: Icon(
+                                  Icons.mic,
+                                  color: theme.colorScheme.onPrimary,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+
+                            Expanded(
+                              child: TextField(
+                                decoration: InputDecoration(
+                                  hintText: 'Type a message...',
+                                  filled: true,
+                                  fillColor: theme.colorScheme.surfaceContainerHighest,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+
+                            IconButton(
+                              onPressed: () {
+                                //add code here
+                              },
+                              icon: const Icon(Icons.send, color: AppColors.Ocean),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ],
           ),
         ),
 
-        /// Messages page
+        /// Settings page
         ListView.builder(
           reverse: true,
           itemCount: 2,
