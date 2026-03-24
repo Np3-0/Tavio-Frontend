@@ -24,6 +24,10 @@ class NavigationExample extends StatefulWidget {
 class _NavigationExampleState extends State<NavigationExample> {
   int currentPageIndex = 0;
   bool isCheckingPermissions = false;
+  bool notificationsEnabled = true;
+  bool locationServicesEnabled = true;
+  bool voiceAssistantEnabled = true;
+  bool saveSearchHistory = true;
   String permissionSummary = 'Pending permission check...';
 
   @override
@@ -94,7 +98,7 @@ class _NavigationExampleState extends State<NavigationExample> {
       ),
 
       body: <Widget>[
-        /// Home page
+        // Home page
         Card(
           elevation: 0,
           shadowColor: Colors.transparent,
@@ -143,8 +147,7 @@ class _NavigationExampleState extends State<NavigationExample> {
           ),
         ),
 
-        /// Chat page
-        /// Chat page
+        // Chat page
         Padding(
           padding: const EdgeInsets.all(8.0),
           child: Column(
@@ -268,48 +271,132 @@ class _NavigationExampleState extends State<NavigationExample> {
         ),
 
         /// Settings page
-        ListView.builder(
-          reverse: true,
-          itemCount: 2,
-          itemBuilder: (BuildContext context, int index) {
-            if (index == 0) {
-              return Align(
-                alignment: Alignment.centerRight,
-                child: Container(
-                  margin: const EdgeInsets.all(8.0),
-                  padding: const EdgeInsets.all(8.0),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
-                    borderRadius: BorderRadius.circular(8.0),
+        Card(
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          margin: const EdgeInsets.all(8.0),
+          child: SizedBox.expand(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: <Widget>[
+                  Text('Settings Menu', style: theme.textTheme.titleLarge),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Change values and permissions for the app.',
+                    style: theme.textTheme.titleMedium,
                   ),
-                  child: Text(
-                    'Hello',
-                    style: theme.textTheme.bodyLarge!.copyWith(
-                      color: theme.colorScheme.onPrimary,
-                    ),
+                  const SizedBox(height: 24),
+                  Expanded(
+                    child: ListView(
+                      children: <Widget>[
+                        Card(
+                          child: SwitchListTile(
+                            secondary: const Icon(Icons.notifications, color: AppColors.Ocean),
+                            title: const Text('Push Notifications'),
+                            subtitle: const Text('Get updates for nearby restaurants and offers.'),
+                            activeTrackColor: AppColors.Ocean,
+                            value: notificationsEnabled,
+                            onChanged: (bool value) {
+                              setState(() {
+                                notificationsEnabled = value;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Card(
+                          child: SwitchListTile(
+                            secondary: const Icon(Icons.location_on, color: AppColors.Ocean),
+                            title: const Text('Use Current Location'),
+                            subtitle: const Text('Help find restaurants close to you.'),
+                            activeTrackColor: AppColors.Ocean,
+                            value: locationServicesEnabled,
+                            onChanged: (bool value) {
+                              setState(() {
+                                locationServicesEnabled = value;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Card(
+                          child: SwitchListTile(
+                            secondary: const Icon(Icons.mic, color: AppColors.Ocean),
+                            title: const Text('Voice Assistant'),
+                            subtitle: const Text('Enable voice input in chat.'),
+                            activeTrackColor: AppColors.Ocean,
+                            value: voiceAssistantEnabled,
+                            onChanged: (bool value) {
+                              setState(() {
+                                voiceAssistantEnabled = value;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Card(
+                          child: SwitchListTile(
+                            secondary: const Icon(Icons.history, color: AppColors.Ocean),
+                            title: const Text('Save Search History'),
+                            subtitle: const Text('Keep recent searches for quick access.'),
+                            activeTrackColor: AppColors.Ocean,
+                            value: saveSearchHistory,
+                            onChanged: (bool value) {
+                              setState(() {
+                                saveSearchHistory = value;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Card(
+                          child: ListTile(
+                            leading: const Icon(Icons.verified_user, color: AppColors.Ocean),
+                            title: const Text('Permission Status'),
+                            subtitle: Text(permissionSummary),
+                            trailing: isCheckingPermissions
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : IconButton(
+                                    onPressed: _runPermissionCheck,
+                                    icon: const Icon(Icons.refresh, color: AppColors.Ocean),
+                                    tooltip: 'Check again',
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Card(
+                          child: ListTile(
+                            leading: const Icon(Icons.lock_reset, color: AppColors.Ocean),
+                            title: const Text('Reset Preferences'),
+                            subtitle: const Text('Restore all settings to defaults.'),
+                            onTap: () {
+                              setState(() {
+                                notificationsEnabled = true;
+                                locationServicesEnabled = true;
+                                voiceAssistantEnabled = true;
+                                saveSearchHistory = true;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Settings reset to defaults.')),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    )
                   ),
-                ),
-              );
-            }
-            return Align(
-              alignment: Alignment.centerLeft,
-              child: Container(
-                margin: const EdgeInsets.all(8.0),
-                padding: const EdgeInsets.all(8.0),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary,
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-                child: Text(
-                  'Hi!',
-                  style: theme.textTheme.bodyLarge!.copyWith(
-                    color: theme.colorScheme.onPrimary,
-                  ),
-                ),
-              ),
-            );
-          },
+                ],
+              )
+            ),
+          ),
         ),
+
       ][currentPageIndex],
     );
   }
