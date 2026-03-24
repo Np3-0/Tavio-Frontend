@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:restaurantfinder/utils/app_colors.dart';
 import 'package:restaurantfinder/utils/permissions.dart';
+import 'package:restaurantfinder/widgets/allergy_dialog.dart';
 
 void main() => runApp(const NavigationBarApp());
 
@@ -28,6 +29,7 @@ class _NavigationExampleState extends State<NavigationExample> {
   bool locationServicesEnabled = true;
   bool voiceAssistantEnabled = true;
   bool saveSearchHistory = true;
+  final List<String> allergies = <String>[];
   String permissionSummary = 'Pending permission check...';
 
   @override
@@ -60,6 +62,33 @@ class _NavigationExampleState extends State<NavigationExample> {
           ? 'All requested permissions granted.'
           : 'Missing: ${missing.join(', ')}';
     });
+  }
+
+  Future<void> _showAllergyDialog() async {
+    final List<String>? updatedAllergies = await showAllergyDialog(
+      context: context,
+      initialAllergies: allergies,
+    );
+
+    if (!mounted || updatedAllergies == null) {
+      return;
+    }
+
+    setState(() {
+      allergies
+        ..clear()
+        ..addAll(updatedAllergies);
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          allergies.isEmpty
+              ? 'No allergies saved.'
+              : 'Saved allergies: ${allergies.join(', ')}',
+        ),
+      ),
+    );
   }
 
   @override
@@ -353,6 +382,22 @@ class _NavigationExampleState extends State<NavigationExample> {
                         const SizedBox(height: 12),
                         Card(
                           child: ListTile(
+                            leading: const Icon(Icons.no_food, color: AppColors.Ocean),
+                            title: const Text('Set Allergens'),
+                            subtitle: Text(
+                              allergies.isEmpty
+                                  ? 'Enter any allergies you have.'
+                                  : allergies.join(', '),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: _showAllergyDialog,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Card(
+                          child: ListTile(
                             leading: const Icon(Icons.verified_user, color: AppColors.Ocean),
                             title: const Text('Permission Status'),
                             subtitle: Text(permissionSummary),
@@ -396,7 +441,6 @@ class _NavigationExampleState extends State<NavigationExample> {
             ),
           ),
         ),
-
       ][currentPageIndex],
     );
   }
