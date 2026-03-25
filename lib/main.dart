@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:restaurantfinder/data/user_preferences_repository.dart';
 import 'package:restaurantfinder/utils/app_colors.dart';
 import 'package:restaurantfinder/utils/permissions.dart';
 import 'package:restaurantfinder/widgets/allergy_dialog.dart';
@@ -23,13 +24,18 @@ class NavigationExample extends StatefulWidget {
 }
 
 class _NavigationExampleState extends State<NavigationExample> {
+  final UserPreferencesRepository _preferencesRepository =
+      UserPreferencesRepository();
+
   int currentPageIndex = 0;
   bool isCheckingPermissions = false;
   bool notificationsEnabled = true;
   bool locationServicesEnabled = true;
   bool voiceAssistantEnabled = true;
   bool saveSearchHistory = true;
+  bool isLoadingAllergies = false;
   final List<String> allergies = <String>[];
+  Map<String, String> allowedAllergyLookup = <String, String>{};
   String permissionSummary = 'Pending permission check...';
 
   @override
@@ -37,6 +43,30 @@ class _NavigationExampleState extends State<NavigationExample> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _runPermissionCheck();
+      _loadAllergyPreferences();
+    });
+  }
+
+  Future<void> _loadAllergyPreferences() async {
+    setState(() {
+      isLoadingAllergies = true;
+    });
+
+    final Map<String, String> loadedLookup =
+        await _preferencesRepository.loadAllowedAllergyLookup();
+    final List<String> savedAllergies =
+        await _preferencesRepository.loadSavedAllergies();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      allowedAllergyLookup = loadedLookup;
+      allergies
+        ..clear()
+        ..addAll(savedAllergies);
+      isLoadingAllergies = false;
     });
   }
 
@@ -65,9 +95,17 @@ class _NavigationExampleState extends State<NavigationExample> {
   }
 
   Future<void> _showAllergyDialog() async {
+    if (allowedAllergyLookup.isEmpty) {
+      await _loadAllergyPreferences();
+      if (!mounted || allowedAllergyLookup.isEmpty) {
+        return;
+      }
+    }
+
     final List<String>? updatedAllergies = await showAllergyDialog(
       context: context,
       initialAllergies: allergies,
+      allowedAllergyLookup: allowedAllergyLookup,
     );
 
     if (!mounted || updatedAllergies == null) {
@@ -79,6 +117,12 @@ class _NavigationExampleState extends State<NavigationExample> {
         ..clear()
         ..addAll(updatedAllergies);
     });
+
+    await _preferencesRepository.saveAllergies(updatedAllergies);
+
+    if (!mounted) {
+      return;
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -385,14 +429,16 @@ class _NavigationExampleState extends State<NavigationExample> {
                             leading: const Icon(Icons.no_food, color: AppColors.Ocean),
                             title: const Text('Set Allergens'),
                             subtitle: Text(
-                              allergies.isEmpty
+                              isLoadingAllergies
+                                  ? 'Loading saved allergies...'
+                                  : allergies.isEmpty
                                   ? 'Enter any allergies you have.'
                                   : allergies.join(', '),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                             trailing: const Icon(Icons.chevron_right),
-                            onTap: _showAllergyDialog,
+                            onTap: isLoadingAllergies ? null : _showAllergyDialog,
                           ),
                         ),
                         const SizedBox(height: 12),
