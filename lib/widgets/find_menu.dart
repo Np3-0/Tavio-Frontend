@@ -4,12 +4,17 @@ import 'package:restaurantfinder/utils/app_colors.dart';
 import 'package:restaurantfinder/widgets/restaurant_menu_page.dart';
 
 class FindMenu extends StatelessWidget {
-  const FindMenu({super.key});
+  const FindMenu({required this.userAllergies, super.key});
+
+  final List<String> userAllergies;
 
   void _openRestaurantMenu(BuildContext context, Restaurant restaurant) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => RestaurantMenuPage(restaurant: restaurant),
+        builder: (_) => RestaurantMenuPage(
+          restaurant: restaurant,
+          userAllergies: userAllergies,
+        ),
       ),
     );
   }

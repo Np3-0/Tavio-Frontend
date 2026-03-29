@@ -168,7 +168,7 @@ class _NavigationExampleState extends State<NavigationExample> {
   Widget _buildCurrentPage(BuildContext context) {
     switch (currentPageIndex) {
       case 0:
-        return const FindMenu();
+        return FindMenu(userAllergies: allergies);
       case 1:
         return const ChatMenu();
       case 2:
