@@ -39,6 +39,7 @@ class RestaurantMenuPage extends StatelessWidget {
               !_containsBlockedAllergen(item.allergens, blockedAllergies),
         )
         .toList();
+      final int hiddenItemCount = restaurant.menuItems.length - visibleItems.length;
 
     return Scaffold(
       appBar: AppBar(
@@ -53,7 +54,16 @@ class RestaurantMenuPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
-          Text('Popular items', style: theme.textTheme.titleLarge),
+          Semantics(
+            header: true,
+            child: Text('Popular items', style: theme.textTheme.titleLarge),
+          ),
+          const SizedBox(height: 8),
+          if (hiddenItemCount > 0)
+            Text(
+              '$hiddenItemCount item(s) hidden because of saved allergies.',
+              style: theme.textTheme.bodyMedium,
+            ),
           const SizedBox(height: 12),
           if (visibleItems.isEmpty)
             Text(
@@ -63,10 +73,12 @@ class RestaurantMenuPage extends StatelessWidget {
           for (final RestaurantMenuItem item in visibleItems)
             Card(
               child: ListTile(
+                minVerticalPadding: 10,
                 title: Text(item.name),
                 subtitle: Text(
                   '${item.description}\nAllergens: ${item.allergens}',
                 ),
+                isThreeLine: true,
                 trailing: Text(
                   '\$${item.price.toStringAsFixed(2)}',
                   style: theme.textTheme.titleMedium,

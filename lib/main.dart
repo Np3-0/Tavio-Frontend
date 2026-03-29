@@ -15,7 +15,77 @@ class NavigationBarApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(home: NavigationExample());
+    final ColorScheme colorScheme = ColorScheme.fromSeed(
+      seedColor: AppColors.Ocean,
+      brightness: Brightness.light,
+    ).copyWith(
+      primary: AppColors.Onyx,
+      onPrimary: AppColors.Alabaster,
+      secondary: AppColors.Ocean,
+      onSecondary: AppColors.Alabaster,
+      surface: Colors.white,
+      onSurface: AppColors.Onyx,
+      error: const Color(0xFFB00020),
+    );
+
+    final TextTheme textTheme = ThemeData.light().textTheme.copyWith(
+      headlineSmall: const TextStyle(
+        fontSize: 28,
+        fontWeight: FontWeight.w700,
+        color: AppColors.Onyx,
+      ),
+      titleLarge: const TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.w700,
+        color: AppColors.Onyx,
+      ),
+      titleMedium: const TextStyle(
+        fontSize: 19,
+        fontWeight: FontWeight.w600,
+        color: AppColors.Onyx,
+      ),
+      bodyLarge: const TextStyle(
+        fontSize: 17,
+        height: 1.4,
+        color: AppColors.Onyx,
+      ),
+      bodyMedium: const TextStyle(
+        fontSize: 15,
+        height: 1.35,
+        color: AppColors.Onyx,
+      ),
+    );
+
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: colorScheme,
+        textTheme: textTheme,
+        scaffoldBackgroundColor: const Color(0xFFF7F9FC),
+        cardTheme: const CardThemeData(
+          elevation: 0,
+          color: Colors.white,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(18)),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFFF1F4F8),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppColors.Ocean, width: 2),
+          ),
+        ),
+      ),
+      home: const NavigationExample(),
+    );
   }
 }
 
@@ -227,15 +297,21 @@ class _NavigationExampleState extends State<NavigationExample> {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Restaurant Finder',
-          style: TextStyle(color: AppColors.Alabaster),
+          style: theme.textTheme.titleLarge?.copyWith(
+            color: AppColors.Alabaster,
+          ),
         ),
         backgroundColor: AppColors.Onyx,
       ),
       bottomNavigationBar: NavigationBar(
+        height: 72,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         onDestinationSelected: (int index) {
           setState(() {
             currentPageIndex = index;
@@ -248,6 +324,7 @@ class _NavigationExampleState extends State<NavigationExample> {
             selectedIcon: Icon(Icons.location_pin, color: AppColors.Alabaster),
             icon: Icon(Icons.location_pin, color: AppColors.Onyx),
             label: 'Find',
+            tooltip: 'Find nearby restaurants',
           ),
           NavigationDestination(
             selectedIcon: Icon(
@@ -256,15 +333,19 @@ class _NavigationExampleState extends State<NavigationExample> {
             ),
             icon: Icon(Icons.perm_phone_msg, color: AppColors.Onyx),
             label: 'Chat',
+            tooltip: 'Open assistant chat',
           ),
           NavigationDestination(
             selectedIcon: Icon(Icons.settings, color: AppColors.Alabaster),
             icon: Icon(Icons.settings, color: AppColors.Onyx),
             label: 'Settings',
+            tooltip: 'Open settings',
           ),
         ],
       ),
-      body: _buildCurrentPage(context),
+      body: SafeArea(
+        child: _buildCurrentPage(context),
+      ),
     );
   }
 }

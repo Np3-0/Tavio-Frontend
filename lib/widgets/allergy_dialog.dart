@@ -114,26 +114,36 @@ class _AllergyDialogContentState extends State<_AllergyDialogContent> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            const Text('Add food allergies to filter restaurant options.'),
+            const Text(
+              'Add food allergies to filter restaurant options. Use the exact names from the supported list.',
+            ),
             const SizedBox(height: 12),
             Row(
               children: <Widget>[
                 Expanded(
-                  child: TextField(
-                    controller: _allergyController,
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => _addAllergy(),
-                    decoration: const InputDecoration(
-                      hintText: 'e.g. peanuts',
-                      border: OutlineInputBorder(),
+                  child: Semantics(
+                    textField: true,
+                    label: 'Allergy input',
+                    hint: 'Enter allergy name, for example peanuts',
+                    child: TextField(
+                      controller: _allergyController,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _addAllergy(),
+                      decoration: const InputDecoration(
+                        hintText: 'e.g. peanuts',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton(
+                IconButton.filled(
                   onPressed: _addAllergy,
-                  icon: const Icon(Icons.add_circle, color: AppColors.Ocean),
+                  icon: const Icon(Icons.add, color: AppColors.Alabaster),
                   tooltip: 'Add allergy',
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.Ocean,
+                  ),
                 ),
               ],
             ),

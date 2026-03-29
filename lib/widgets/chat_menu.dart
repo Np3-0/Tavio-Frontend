@@ -9,22 +9,22 @@ class ChatMenu extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.all(8.0),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const SizedBox(height: 24),
-          Text('Chat', style: theme.textTheme.titleLarge),
-          const SizedBox(height: 16),
+          Semantics(
+            header: true,
+            child: Text('Assistant Chat', style: theme.textTheme.headlineSmall),
+          ),
+          const SizedBox(height: 8),
           Text(
-            'Voice-chat with our AI-assistant.',
+            'Ask for menu guidance and allergy-safe recommendations.',
             style: theme.textTheme.bodyLarge,
           ),
           const SizedBox(height: 16),
           Expanded(
             child: Card(
-              elevation: 0,
-              shadowColor: Colors.transparent,
-              margin: const EdgeInsets.all(8.0),
               child: Padding(
                 padding: const EdgeInsets.all(24.0),
                 child: Column(
@@ -37,17 +37,20 @@ class ChatMenu extends StatelessWidget {
                           if (index % 2 == 1) {
                             return Align(
                               alignment: Alignment.centerRight,
-                              child: Container(
-                                margin: const EdgeInsets.all(8.0),
-                                padding: const EdgeInsets.all(8.0),
-                                decoration: BoxDecoration(
-                                  color: AppColors.Ocean,
-                                  borderRadius: BorderRadius.circular(8.0),
-                                ),
-                                child: Text(
-                                  'Hello',
-                                  style: theme.textTheme.bodyLarge!.copyWith(
-                                    color: AppColors.Alabaster,
+                              child: Semantics(
+                                label: 'You said: Hello',
+                                child: Container(
+                                  margin: const EdgeInsets.all(8.0),
+                                  padding: const EdgeInsets.all(12.0),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.Onyx,
+                                    borderRadius: BorderRadius.circular(12.0),
+                                  ),
+                                  child: Text(
+                                    'Hello',
+                                    style: theme.textTheme.bodyLarge!.copyWith(
+                                      color: AppColors.Alabaster,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -55,17 +58,20 @@ class ChatMenu extends StatelessWidget {
                           }
                           return Align(
                             alignment: Alignment.centerLeft,
-                            child: Container(
-                              margin: const EdgeInsets.all(8.0),
-                              padding: const EdgeInsets.all(8.0),
-                              decoration: BoxDecoration(
-                                color: AppColors.Ocean,
-                                borderRadius: BorderRadius.circular(8.0),
-                              ),
-                              child: Text(
-                                'Hi!',
-                                style: theme.textTheme.bodyLarge!.copyWith(
-                                  color: AppColors.Alabaster,
+                            child: Semantics(
+                              label: 'Assistant said: Hi',
+                              child: Container(
+                                margin: const EdgeInsets.all(8.0),
+                                padding: const EdgeInsets.all(12.0),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFDDEAFF),
+                                  borderRadius: BorderRadius.circular(12.0),
+                                ),
+                                child: Text(
+                                  'Hi!',
+                                  style: theme.textTheme.bodyLarge!.copyWith(
+                                    color: AppColors.Onyx,
+                                  ),
                                 ),
                               ),
                             ),
@@ -76,46 +82,56 @@ class ChatMenu extends StatelessWidget {
                     const SizedBox(height: 12),
                     Row(
                       children: <Widget>[
-                        Container(
-                          decoration: const BoxDecoration(
-                            color: AppColors.Ocean,
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
+                        Semantics(
+                          button: true,
+                          label: 'Start voice input',
+                          child: FilledButton(
                             onPressed: () {
                               // add voice input
                             },
-                            icon: Icon(
+                            style: FilledButton.styleFrom(
+                              shape: const CircleBorder(),
+                              padding: const EdgeInsets.all(16),
+                              backgroundColor: AppColors.Ocean,
+                            ),
+                            child: const Icon(
                               Icons.mic,
-                              color: theme.colorScheme.onPrimary,
+                              color: AppColors.Alabaster,
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: TextField(
-                            decoration: InputDecoration(
-                              hintText: 'Type a message...',
-                              filled: true,
-                              fillColor:
-                                  theme.colorScheme.surfaceContainerHighest,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(24),
-                                borderSide: BorderSide.none,
+                          child: Semantics(
+                            textField: true,
+                            label: 'Message input',
+                            hint: 'Type your question for the assistant',
+                            child: TextField(
+                              decoration: InputDecoration(
+                                hintText: 'Type a message',
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 14,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                  borderSide: BorderSide.none,
+                                ),
                               ),
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
-                        IconButton(
-                          onPressed: () {
-                            // add code here
-                          },
-                          icon: const Icon(Icons.send, color: AppColors.Ocean),
+                        Semantics(
+                          button: true,
+                          label: 'Send message',
+                          child: IconButton(
+                            onPressed: () {
+                              // add code here
+                            },
+                            tooltip: 'Send message',
+                            icon: const Icon(Icons.send, color: AppColors.Ocean),
+                          ),
                         ),
                       ],
                     ),

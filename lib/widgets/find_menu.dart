@@ -23,57 +23,76 @@ class FindMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
-    return Card(
-      elevation: 0,
-      shadowColor: Colors.transparent,
-      margin: const EdgeInsets.all(8.0),
-      child: SizedBox.expand(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: <Widget>[
-              Text('Restaurant Finder', style: theme.textTheme.titleLarge),
-              const SizedBox(height: 12),
-              Text(
-                'Find local restaurants in your area.',
-                style: theme.textTheme.titleMedium,
-              ),
-              const SizedBox(height: 18),
-              SearchBar(
-                hintText: 'Search restaurants...',
-                leading: const Icon(Icons.search),
-                onChanged: (value) {},
-              ),
-              const SizedBox(height: 48),
-              Text('Restaurants near you', style: theme.textTheme.titleMedium),
-              Expanded(
-                child: ListView(
-                  children: <Widget>[
-                    for (final Restaurant restaurant
-                        in sampleRestaurants) ...<Widget>[
-                      Card(
-                        child: ListTile(
-                          leading: const Icon(
-                            Icons.dining,
-                            color: AppColors.Ocean,
-                          ),
-                          title: Text(restaurant.name),
-                          subtitle: Text(
-                            '${restaurant.cuisine}, ${restaurant.distanceMiles.toStringAsFixed(1)} miles away',
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => _openRestaurantMenu(context, restaurant),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Semantics(
+            header: true,
+            child: Text('Find Restaurants', style: theme.textTheme.headlineSmall),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Browse nearby menus and open restaurant details.',
+            style: theme.textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 16),
+          Semantics(
+            textField: true,
+            label: 'Search restaurants',
+            hint: 'Type a restaurant name or cuisine',
+            child: SearchBar(
+              hintText: 'Search restaurants or cuisines',
+              leading: const Icon(Icons.search),
+              onChanged: (value) {},
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text('Restaurants near you', style: theme.textTheme.titleLarge),
+          const SizedBox(height: 10),
+          Expanded(
+            child: ListView.separated(
+              itemCount: sampleRestaurants.length,
+              separatorBuilder: (_, int index) => const SizedBox(height: 12),
+              itemBuilder: (BuildContext context, int index) {
+                final Restaurant restaurant = sampleRestaurants[index];
+
+                return Semantics(
+                  button: true,
+                  label:
+                      '${restaurant.name}, ${restaurant.cuisine}, ${restaurant.distanceMiles.toStringAsFixed(1)} miles away. Double tap to open menu.',
+                  child: Card(
+                    child: ListTile(
+                      minVerticalPadding: 14,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 6,
+                      ),
+                      leading: const CircleAvatar(
+                        backgroundColor: Color(0xFFDDEAFF),
+                        child: Icon(Icons.dining, color: AppColors.Ocean),
+                      ),
+                      title: Text(
+                        restaurant.name,
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '${restaurant.cuisine} • ${restaurant.distanceMiles.toStringAsFixed(1)} mi',
+                          style: theme.textTheme.bodyMedium,
                         ),
                       ),
-                      const SizedBox(height: 12),
-                    ],
-                  ],
-                ),
-              ),
-            ],
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => _openRestaurantMenu(context, restaurant),
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
