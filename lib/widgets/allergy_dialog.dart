@@ -8,15 +8,15 @@ Future<List<String>?> showAllergyDialog({
 }) async {
   return showDialog<List<String>>(
     context: context,
-    builder: (BuildContext dialogContext) => _AllergyDialogContent(
+    builder: (ctx) => _AllergyDialog(
       initialAllergies: initialAllergies,
       allowedAllergyLookup: allowedAllergyLookup,
     ),
   );
 }
 
-class _AllergyDialogContent extends StatefulWidget {
-  const _AllergyDialogContent({
+class _AllergyDialog extends StatefulWidget {
+  const _AllergyDialog({
     required this.initialAllergies,
     required this.allowedAllergyLookup,
   });
@@ -25,84 +25,61 @@ class _AllergyDialogContent extends StatefulWidget {
   final Map<String, String> allowedAllergyLookup;
 
   @override
-  State<_AllergyDialogContent> createState() => _AllergyDialogContentState();
+  State<_AllergyDialog> createState() => _AllergyDialogState();
 }
 
-class _AllergyDialogContentState extends State<_AllergyDialogContent> {
-  late final TextEditingController _allergyController;
-  late final List<String> _draftAllergies;
-  String? _validationMessage;
+class _AllergyDialogState extends State<_AllergyDialog> {
+  late TextEditingController input;
+  late List<String> allergies;
+  String? error;
 
   @override
   void initState() {
     super.initState();
-    _allergyController = TextEditingController();
-    _draftAllergies = List<String>.from(widget.initialAllergies);
+    input = TextEditingController();
+    allergies = List.from(widget.initialAllergies);
   }
 
   @override
   void dispose() {
-    _allergyController.dispose();
+    input.dispose();
     super.dispose();
   }
 
-  void _addAllergy() {
-    final String value = _allergyController.text.trim();
-    if (value.isEmpty) {
-      return;
+  String? _validate(String value) {
+    if (value.isEmpty) return null;
+    
+    final lookup = widget.allowedAllergyLookup[value.toLowerCase()];
+    if (lookup == null) return '"$value" not recognized';
+    
+    if (allergies.any((a) => a.toLowerCase() == lookup.toLowerCase())) {
+      return 'Already added';
     }
-
-    final String? canonicalAllergy =
-        widget.allowedAllergyLookup[value.toLowerCase()];
-
-    if (canonicalAllergy == null) {
-      setState(() {
-        _validationMessage = '"$value" is not in the supported allergy list.';
-      });
-      return;
-    }
-
-    final bool exists = _draftAllergies.any(
-      (String allergy) => allergy.toLowerCase() == canonicalAllergy.toLowerCase(),
-    );
-
-    setState(() {
-      if (exists) {
-        _validationMessage = '"$canonicalAllergy" is already added.';
-      } else {
-        _draftAllergies.add(canonicalAllergy);
-        _validationMessage = null;
-      }
-    });
-
-    _allergyController.clear();
+    return null;
   }
 
-  void _saveAllergies() {
-    final String pendingValue = _allergyController.text.trim();
-    if (pendingValue.isNotEmpty) {
-      final String? canonicalAllergy =
-          widget.allowedAllergyLookup[pendingValue.toLowerCase()];
+  void _add() {
+    final value = input.text.trim();
+    final err = _validate(value);
+    
+    setState(() => error = err);
+    if (err != null) return;
+    
+    final canonical = widget.allowedAllergyLookup[value.toLowerCase()]!;
+    allergies.add(canonical);
+    input.clear();
+  }
 
-      if (canonicalAllergy == null) {
-        setState(() {
-          _validationMessage =
-              '"$pendingValue" is not in the supported allergy list.';
-        });
-        return;
-      }
-
-      final bool exists = _draftAllergies.any(
-        (String allergy) =>
-            allergy.toLowerCase() == canonicalAllergy.toLowerCase(),
-      );
-
-      if (!exists) {
-        _draftAllergies.add(canonicalAllergy);
+  void _save() {
+    // try adding any pending input
+    final pending = input.text.trim();
+    if (pending.isNotEmpty && _validate(pending) == null) {
+      final canonical = widget.allowedAllergyLookup[pending.toLowerCase()]!;
+      if (!allergies.contains(canonical)) {
+        allergies.add(canonical);
       }
     }
-
-    Navigator.of(context).pop(_draftAllergies);
+    Navigator.pop(context, allergies);
   }
 
   @override
@@ -113,79 +90,52 @@ class _AllergyDialogContentState extends State<_AllergyDialogContent> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            const Text(
-              'Add food allergies to filter restaurant options. Use the exact names from the supported list.',
-            ),
+          children: [
+            const Text('Add food allergies to filter restaurant options.'),
             const SizedBox(height: 12),
             Row(
-              children: <Widget>[
+              children: [
                 Expanded(
-                  child: Semantics(
-                    textField: true,
-                    label: 'Allergy input',
-                    hint: 'Enter allergy name, for example peanuts',
-                    child: TextField(
-                      controller: _allergyController,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _addAllergy(),
-                      decoration: const InputDecoration(
-                        hintText: 'e.g. peanuts',
-                        border: OutlineInputBorder(),
-                      ),
+                  child: TextField(
+                    controller: input,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _add(),
+                    decoration: const InputDecoration(
+                      hintText: 'e.g. peanuts',
+                      border: OutlineInputBorder(),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 IconButton.filled(
-                  onPressed: _addAllergy,
+                  onPressed: _add,
                   icon: const Icon(Icons.add, color: AppColors.Alabaster),
-                  tooltip: 'Add allergy',
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.Ocean,
-                  ),
+                  style: IconButton.styleFrom(backgroundColor: AppColors.Ocean),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            if (_validationMessage != null) ...<Widget>[
-              Text(
-                _validationMessage!,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-              ),
+            if (error != null) ...[
               const SizedBox(height: 8),
+              Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error))
             ],
-            if (_draftAllergies.isEmpty)
-              const Text('No allergies added yet.')
+            const SizedBox(height: 12),
+            if (allergies.isEmpty)
+              const Text('None yet.')
             else
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: _draftAllergies.map((String allergy) {
-                  return InputChip(
-                    label: Text(allergy),
-                    onDeleted: () {
-                      setState(() {
-                        _draftAllergies.remove(allergy);
-                      });
-                    },
-                  );
-                }).toList(),
+                children: allergies.map((a) => InputChip(
+                  label: Text(a),
+                  onDeleted: () => setState(() => allergies.remove(a)),
+                )).toList(),
               ),
           ],
         ),
       ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: _saveAllergies,
-          child: const Text('Save'),
-        ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        ElevatedButton(onPressed: _save, child: const Text('Save')),
       ],
     );
   }

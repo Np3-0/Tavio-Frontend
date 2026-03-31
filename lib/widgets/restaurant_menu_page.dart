@@ -12,77 +12,51 @@ class RestaurantMenuPage extends StatelessWidget {
   final Restaurant restaurant;
   final List<String> userAllergies;
 
-  bool _containsBlockedAllergen(String itemAllergens, Set<String> blocked) {
-    if (blocked.isEmpty) {
-      return false;
-    }
-
-    final List<String> allergens = itemAllergens
+  bool _isBlocked(String itemAllergens) {
+    if (userAllergies.isEmpty) return false;
+    
+    final blocked = userAllergies
+        .map((a) => a.trim().toLowerCase())
+        .toSet();
+    
+    final allergens = itemAllergens
         .split(',')
-        .map((String value) => value.trim().toLowerCase())
-        .where((String value) => value.isNotEmpty && value != 'none')
-        .toList();
-
+        .map((a) => a.trim().toLowerCase())
+        .where((a) => a.isNotEmpty && a != 'none')
+        .toSet();
+    
     return allergens.any(blocked.contains);
   }
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final Set<String> blockedAllergies = userAllergies
-        .map((String value) => value.trim().toLowerCase())
-        .where((String value) => value.isNotEmpty)
-        .toSet();
-    final List<RestaurantMenuItem> visibleItems = restaurant.menuItems
-        .where(
-          (RestaurantMenuItem item) =>
-              !_containsBlockedAllergen(item.allergens, blockedAllergies),
-        )
-        .toList();
-      final int hiddenItemCount = restaurant.menuItems.length - visibleItems.length;
+    final theme = Theme.of(context);
+    final visible = restaurant.menuItems.where((item) => !_isBlocked(item.allergens)).toList();
+    final hidden = restaurant.menuItems.length - visible.length;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          '${restaurant.name} Menu',
-          style: const TextStyle(color: AppColors.Alabaster),
-        ),
-
+        title: Text('${restaurant.name} Menu', style: const TextStyle(color: AppColors.Alabaster)),
         backgroundColor: AppColors.Onyx,
         iconTheme: const IconThemeData(color: AppColors.Alabaster),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
-        children: <Widget>[
-          Semantics(
-            header: true,
-            child: Text('Popular items', style: theme.textTheme.titleLarge),
-          ),
+        children: [
+          Semantics(header: true, child: Text('Popular items', style: theme.textTheme.titleLarge)),
           const SizedBox(height: 8),
-          if (hiddenItemCount > 0)
-            Text(
-              '$hiddenItemCount item(s) hidden because of saved allergies.',
-              style: theme.textTheme.bodyMedium,
-            ),
+          if (hidden > 0) Text('$hidden item(s) hidden due to your allergies.', style: theme.textTheme.bodyMedium),
           const SizedBox(height: 12),
-          if (visibleItems.isEmpty)
-            Text(
-              'No menu items are available for your saved allergens.',
-              style: theme.textTheme.bodyLarge,
-            ),
-          for (final RestaurantMenuItem item in visibleItems)
+          if (visible.isEmpty)
+            Text('Looks like nothing here is safe for your allergies.', style: theme.textTheme.bodyLarge),
+          for (final item in visible)
             Card(
               child: ListTile(
                 minVerticalPadding: 10,
                 title: Text(item.name),
-                subtitle: Text(
-                  '${item.description}\nAllergens: ${item.allergens}',
-                ),
+                subtitle: Text('${item.description}\nAllergens: ${item.allergens}'),
                 isThreeLine: true,
-                trailing: Text(
-                  '\$${item.price.toStringAsFixed(2)}',
-                  style: theme.textTheme.titleMedium,
-                ),
+                trailing: Text('\$${item.price.toStringAsFixed(2)}', style: theme.textTheme.titleMedium),
               ),
             ),
         ],
