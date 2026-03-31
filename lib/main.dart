@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:restaurantfinder/data/restaurant_data.dart';
 import 'package:restaurantfinder/data/user_preferences_repository.dart';
 import 'package:restaurantfinder/utils/app_colors.dart';
 import 'package:restaurantfinder/utils/permissions.dart';
 import 'package:restaurantfinder/widgets/allergy_dialog.dart';
-import 'package:restaurantfinder/widgets/chat_menu.dart';
 import 'package:restaurantfinder/widgets/find_menu.dart';
+import 'package:restaurantfinder/widgets/restaurant_menu_page.dart';
 import 'package:restaurantfinder/widgets/settings_menu.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 void main() => runApp(const NavigationBarApp());
 
@@ -82,6 +86,8 @@ class NavigationExample extends StatefulWidget {
 
 class _NavigationExampleState extends State<NavigationExample> {
   final prefs = UserPreferencesRepository();
+  final stt.SpeechToText speech = stt.SpeechToText();
+  final FlutterTts tts = FlutterTts();
 
   int tab = 0;
   bool checkingPerms = false;
@@ -90,6 +96,12 @@ class _NavigationExampleState extends State<NavigationExample> {
   bool voice = true;
   bool history = true;
   bool loadingAllergies = false;
+  bool listening = false;
+  bool voiceReady = false;
+  bool speaking = false;
+  bool pausedByUser = false;
+  bool restartPending = false;
+  String heardCommand = '';
   List<String> allergies = [];
   Map<String, String> allergyList = {};
   String permStatus = 'Checking...';
@@ -98,10 +110,93 @@ class _NavigationExampleState extends State<NavigationExample> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkPerms();
-      _loadAllergies();
-      _loadSettings();
+      _bootstrap();
     });
+  }
+
+  Future<void> _bootstrap() async {
+    _checkPerms();
+    _loadAllergies();
+    await _loadSettings();
+    await _initVoiceAssistant();
+    _scheduleRestart();
+  }
+
+  @override
+  void dispose() {
+    speech.stop();
+    tts.stop();
+    super.dispose();
+  }
+
+  Future<void> _initVoiceAssistant() async {
+    await tts.setLanguage('en-US');
+    await tts.setSpeechRate(0.46);
+    await tts.setVolume(1.0);
+    await tts.awaitSpeakCompletion(true);
+
+    final available = await speech.initialize(
+      onStatus: _onSpeechStatus,
+      onError: (_) {
+        if (!mounted) return;
+        setState(() => listening = false);
+        _announce('I could not understand that. Please try again.');
+      },
+    );
+
+    if (!mounted) return;
+    setState(() => voiceReady = available);
+  }
+
+  void _onSpeechStatus(String status) {
+    if (!mounted) return;
+    final nowListening = status == 'listening';
+    if (listening != nowListening) {
+      setState(() => listening = nowListening);
+    }
+
+    final stopped = status == 'done' || status == 'notListening';
+    if (stopped) {
+      _scheduleRestart();
+    }
+  }
+
+  void _scheduleRestart() {
+    if (!mounted || restartPending || pausedByUser || speaking || !voice || !voiceReady) {
+      return;
+    }
+
+    if (speech.isListening || listening) return;
+    restartPending = true;
+
+    Future<void>.delayed(const Duration(milliseconds: 500), () async {
+      restartPending = false;
+      if (!mounted || pausedByUser || speaking || !voice || !voiceReady) return;
+      if (speech.isListening || listening) return;
+      await _startVoiceInput(announceStart: false);
+    });
+  }
+
+  Future<void> _announce(String message) async {
+    if (mounted) {
+      await SemanticsService.sendAnnouncement(
+        View.of(context),
+        message,
+        Directionality.of(context),
+      );
+    }
+    if (!voice) return;
+
+    if (speech.isListening || listening) {
+      await speech.stop();
+      if (mounted) setState(() => listening = false);
+    }
+
+    speaking = true;
+    await tts.stop();
+    await tts.speak(message);
+    speaking = false;
+    _scheduleRestart();
   }
 
   Future<void> _loadAllergies() async {
@@ -163,6 +258,295 @@ class _NavigationExampleState extends State<NavigationExample> {
     });
   }
 
+  Future<void> _startVoiceInput({bool announceStart = true}) async {
+    if (!voice) {
+      await _announce('Voice assistant is disabled in settings.');
+      return;
+    }
+
+    if (!voiceReady) {
+      await _initVoiceAssistant();
+      if (!voiceReady) {
+        await _announce('Voice input is unavailable on this device.');
+        return;
+      }
+    }
+
+    final mic = await Permission.microphone.request();
+    if (mic != PermissionStatus.granted) {
+      await _announce('Microphone permission is required for voice control.');
+      return;
+    }
+
+    pausedByUser = false;
+
+    if (speech.isListening || listening) {
+      return;
+    }
+
+    if (announceStart) {
+      await _announce('Listening for commands.');
+    }
+
+    if (mounted) {
+      setState(() {
+        heardCommand = '';
+        listening = true;
+      });
+    }
+
+    await speech.listen(
+      listenOptions: stt.SpeechListenOptions(
+        listenMode: stt.ListenMode.confirmation,
+        partialResults: true,
+      ),
+      onResult: (result) {
+        if (!mounted || result.recognizedWords.isEmpty) return;
+        setState(() => heardCommand = result.recognizedWords);
+        if (result.finalResult) {
+          speech.stop();
+          _handleVoiceCommand(result.recognizedWords);
+        }
+      },
+    );
+  }
+
+  Future<void> _pauseVoiceInput() async {
+    pausedByUser = true;
+    await speech.stop();
+    if (mounted) setState(() => listening = false);
+  }
+
+  Future<void> _toggleVoiceInput() async {
+    if (!voice) {
+      await _setVoiceAssistant(true);
+      return;
+    }
+
+    if (speech.isListening || listening) {
+      await _pauseVoiceInput();
+      await _announce('Voice control paused.');
+      return;
+    }
+
+    await _startVoiceInput();
+  }
+
+  Future<void> _setNotifications(bool value) async {
+    setState(() => notifications = value);
+    await _saveSettings();
+    await _announce('Notifications ${value ? 'enabled' : 'disabled'}.');
+  }
+
+  Future<void> _setLocation(bool value) async {
+    setState(() => location = value);
+    await _saveSettings();
+    await _announce('Location services ${value ? 'enabled' : 'disabled'}.');
+  }
+
+  Future<void> _setVoiceAssistant(bool value) async {
+    setState(() => voice = value);
+    await _saveSettings();
+
+    if (!value) {
+      pausedByUser = true;
+      await speech.stop();
+      if (mounted) setState(() => listening = false);
+      await _announce('Voice assistant disabled.');
+      return;
+    }
+
+    pausedByUser = false;
+    await _announce('Voice assistant enabled.');
+    _scheduleRestart();
+  }
+
+  Future<void> _setHistory(bool value) async {
+    setState(() => history = value);
+    await _saveSettings();
+    await _announce('Search history ${value ? 'enabled' : 'disabled'}.');
+  }
+
+  Future<void> _resetPreferences() async {
+    setState(() {
+      notifications = true;
+      location = true;
+      voice = true;
+      history = true;
+    });
+    await _saveSettings();
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Back to normal.')),
+    );
+    await _announce('Preferences reset to default values.');
+  }
+
+  Future<void> _handleVoiceCommand(String raw) async {
+    final command = raw.toLowerCase().trim();
+    final enable = command.contains('turn on') || command.contains('enable');
+    final disable = command.contains('turn off') || command.contains('disable');
+    final toggle = command.contains('toggle');
+
+    if (command == 'close' || command == 'close menu' || command == 'exit menu') {
+      await _closeCurrentScreen();
+      return;
+    }
+
+    if (command.contains('help') || command.contains('what can i say')) {
+      await _announce(
+        'You can say: go to find, go to settings, open allergies, refresh permissions, '
+        'turn on notifications, turn off location, toggle voice assistant, toggle search history, reset preferences, '
+        'open restaurant name, list restaurants, search cuisine type, or close menu.',
+      );
+      return;
+    }
+
+    if (command.startsWith('open ')) {
+      final restaurantName = command.substring(5).trim();
+      await _openRestaurantByName(restaurantName);
+      return;
+    }
+
+    if (command.contains('list restaurants') || command == 'restaurants') {
+      await _listRestaurants();
+      return;
+    }
+
+    if (command.startsWith('search ') || command.contains('search for')) {
+      final cuisineQuery = command.replaceAll('search ', '').replaceAll('search for ', '').trim();
+      await _searchByCuisine(cuisineQuery);
+      return;
+    }
+
+    if (command.contains('go to find') || command.contains("find")) {
+      setState(() => tab = 0);
+      await _announce('Opened Find tab.');
+      return;
+    }
+
+    if (command.contains('go to settings') || command.contains("settings")) {
+      setState(() => tab = 1);
+      await _announce('Opened Settings tab.');
+      return;
+    }
+
+    if (command.contains('open allergies') || command.contains('set allergies') || command.contains('set allergens')) {
+      setState(() => tab = 1);
+      await _announce('Opening allergy settings.');
+      await _showAllergyDialog();
+      return;
+    }
+
+    if (command.contains('refresh permissions') || command.contains('check permissions')) {
+      setState(() => tab = 1);
+      await _announce('Checking permissions.');
+      await _checkPerms();
+      return;
+    }
+
+    if (command.contains('notifications')) {
+      if (toggle) return _setNotifications(!notifications);
+      if (enable) return _setNotifications(true);
+      if (disable) return _setNotifications(false);
+    }
+
+    if (command.contains('location')) {
+      if (toggle) return _setLocation(!location);
+      if (enable) return _setLocation(true);
+      if (disable) return _setLocation(false);
+    }
+
+    if (command.contains('voice assistant')) {
+      if (toggle) return _setVoiceAssistant(!voice);
+      if (enable) return _setVoiceAssistant(true);
+      if (disable) return _setVoiceAssistant(false);
+    }
+
+    if (command.contains('search history') || command.contains('history')) {
+      if (toggle) return _setHistory(!history);
+      if (enable) return _setHistory(true);
+      if (disable) return _setHistory(false);
+    }
+
+    if (command.contains('reset') || command.contains('default')) {
+      await _resetPreferences();
+      return;
+    }
+
+    await _announce('I did not recognize that command. Say help for available commands.');
+  }
+
+  Future<void> _closeCurrentScreen() async {
+    if (!mounted) return;
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      await _announce('Closed menu.');
+      return;
+    }
+
+    await _announce('There is no open menu to close.');
+  }
+
+  Restaurant? _findRestaurantByName(String query) {
+    final normalized = query.toLowerCase().trim();
+    try {
+      return sampleRestaurants.firstWhere(
+        (r) => r.name.toLowerCase().contains(normalized),
+        orElse: () => throw StateError('not found'),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<Restaurant> _searchRestaurantsByCuisine(String cuisine) {
+    final normalized = cuisine.toLowerCase().trim();
+    return sampleRestaurants
+        .where((r) => r.cuisine.toLowerCase().contains(normalized))
+        .toList();
+  }
+
+  Future<void> _openRestaurantByName(String restaurantName) async {
+    final restaurant = _findRestaurantByName(restaurantName);
+    if (restaurant == null) {
+      await _announce('Could not find a restaurant matching $restaurantName. Say list restaurants to hear all options.');
+      return;
+    }
+
+    setState(() => tab = 0);
+    await _announce('Opening ${restaurant.name}.');
+
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RestaurantMenuPage(
+          restaurant: restaurant,
+          userAllergies: allergies,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _listRestaurants() async {
+    final names = sampleRestaurants.map((r) => r.name).join(', ');
+    await _announce('Available restaurants: $names');
+  }
+
+  Future<void> _searchByCuisine(String cuisine) async {
+    final results = _searchRestaurantsByCuisine(cuisine);
+    if (results.isEmpty) {
+      await _announce('No restaurants found with $cuisine cuisine.');
+      return;
+    }
+
+    setState(() => tab = 0);
+    final names = results.map((r) => r.name).join(', ');
+    await _announce('Found ${results.length} restaurants: $names');
+  }
+
   Future<void> _showAllergyDialog() async {
     if (allergyList.isEmpty) {
       await _loadAllergies();
@@ -194,6 +578,21 @@ class _NavigationExampleState extends State<NavigationExample> {
       appBar: AppBar(
         title: Text('Tavio', style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.Alabaster)),
         backgroundColor: AppColors.Onyx,
+        actions: [
+          Semantics(
+            button: true,
+            label: listening ? 'Pause voice input' : 'Resume voice input',
+            hint: 'Double tap to pause or resume always-on voice commands',
+            child: IconButton(
+              onPressed: _toggleVoiceInput,
+              tooltip: listening ? 'Pause voice input' : 'Resume voice input',
+              icon: Icon(
+                listening ? Icons.hearing_disabled : Icons.hearing,
+                color: AppColors.Alabaster,
+              ),
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         height: 72,
@@ -209,12 +608,6 @@ class _NavigationExampleState extends State<NavigationExample> {
             tooltip: 'Find nearby restaurants',
           ),
           NavigationDestination(
-            selectedIcon: Icon(Icons.perm_phone_msg, color: AppColors.Alabaster),
-            icon: Icon(Icons.perm_phone_msg, color: AppColors.Ocean),
-            label: 'Chat',
-            tooltip: 'Open assistant chat',
-          ),
-          NavigationDestination(
             selectedIcon: Icon(Icons.settings, color: AppColors.Alabaster),
             icon: Icon(Icons.settings, color: AppColors.Ocean),
             label: 'Settings',
@@ -225,7 +618,6 @@ class _NavigationExampleState extends State<NavigationExample> {
       body: SafeArea(
         child: [
           FindMenu(userAllergies: allergies),
-          const ChatMenu(),
           SettingsMenu(
             notificationsEnabled: notifications,
             locationServicesEnabled: location,
@@ -236,35 +628,20 @@ class _NavigationExampleState extends State<NavigationExample> {
             permissionSummary: permStatus,
             isCheckingPermissions: checkingPerms,
             onNotificationsChanged: (val) {
-              setState(() => notifications = val);
-              _saveSettings();
+              _setNotifications(val);
             },
             onLocationServicesChanged: (val) {
-              setState(() => location = val);
-              _saveSettings();
+              _setLocation(val);
             },
             onVoiceAssistantChanged: (val) {
-              setState(() => voice = val);
-              _saveSettings();
+              _setVoiceAssistant(val);
             },
             onSaveSearchHistoryChanged: (val) {
-              setState(() => history = val);
-              _saveSettings();
+              _setHistory(val);
             },
             onOpenAllergies: _showAllergyDialog,
             onPermissionRefresh: _checkPerms,
-            onResetPreferences: () {
-              setState(() {
-                notifications = true;
-                location = true;
-                voice = true;
-                history = true;
-              });
-              _saveSettings();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Back to normal.')),
-              );
-            },
+            onResetPreferences: _resetPreferences,
           ),
         ][tab],
       ),
