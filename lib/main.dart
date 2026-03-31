@@ -120,6 +120,17 @@ class _NavigationExampleState extends State<NavigationExample> {
       voice = saved['voiceAssistantEnabled'] ?? true;
       history = saved['saveSearchHistory'] ?? true;
     });
+
+    if (saved['isFirstLaunch'] == true) {
+      await _showAllergyDialog();
+      await prefs.saveGeneralSettings(
+        notificationsEnabled: notifications,
+        locationServicesEnabled: location,
+        voiceAssistantEnabled: voice,
+        saveSearchHistory: history,
+        isFirstLaunch: false,
+      );
+    }
   }
 
   Future<void> _saveSettings() {
@@ -128,6 +139,7 @@ class _NavigationExampleState extends State<NavigationExample> {
       locationServicesEnabled: location,
       voiceAssistantEnabled: voice,
       saveSearchHistory: history,
+      isFirstLaunch: false,
     );
   }
 

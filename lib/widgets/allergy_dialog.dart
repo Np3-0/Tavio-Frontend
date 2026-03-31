@@ -85,7 +85,7 @@ class _AllergyDialogState extends State<_AllergyDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Set Allergies'),
+      title: const Text('Set Allergies', semanticsLabel: 'Set Allergies Dialog'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -102,6 +102,7 @@ class _AllergyDialogState extends State<_AllergyDialog> {
                     onSubmitted: (_) => _add(),
                     decoration: const InputDecoration(
                       hintText: 'e.g. peanuts',
+                      labelText: 'Allergy Name',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -109,6 +110,7 @@ class _AllergyDialogState extends State<_AllergyDialog> {
                 const SizedBox(width: 8),
                 IconButton.filled(
                   onPressed: _add,
+                  tooltip: 'Add allergy',
                   icon: const Icon(Icons.add, color: AppColors.Alabaster),
                   style: IconButton.styleFrom(backgroundColor: AppColors.Ocean),
                 ),
@@ -116,18 +118,27 @@ class _AllergyDialogState extends State<_AllergyDialog> {
             ),
             if (error != null) ...[
               const SizedBox(height: 8),
-              Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error))
+              Text(
+                error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                semanticsLabel: 'Error: $error',
+              )
             ],
             const SizedBox(height: 12),
             if (allergies.isEmpty)
-              const Text('None yet.')
+              const Text('None yet.', semanticsLabel: 'No allergies added yet.')
             else
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: allergies.map((a) => InputChip(
-                  label: Text(a),
-                  onDeleted: () => setState(() => allergies.remove(a)),
+                children: allergies.map((a) => Semantics(
+                  label: 'Allergy: $a. Double tap to remove.',
+                  button: true,
+                  child: InputChip(
+                    label: Text(a),
+                    deleteButtonTooltipMessage: 'Remove $a',
+                    onDeleted: () => setState(() => allergies.remove(a)),
+                  ),
                 )).toList(),
               ),
           ],

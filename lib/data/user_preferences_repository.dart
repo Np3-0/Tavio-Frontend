@@ -61,6 +61,7 @@ class UserPreferencesRepository {
       'locationServicesEnabled': data['locationServicesEnabled'] as bool? ?? true,
       'voiceAssistantEnabled': data['voiceAssistantEnabled'] as bool? ?? true,
       'saveSearchHistory': data['saveSearchHistory'] as bool? ?? true,
+      'isFirstLaunch': data['isFirstLaunch'] as bool? ?? true,
     };
   }
 
@@ -69,6 +70,7 @@ class UserPreferencesRepository {
     required bool locationServicesEnabled,
     required bool voiceAssistantEnabled,
     required bool saveSearchHistory,
+    bool isFirstLaunch = false,
   }) async {
     final file = await _getFile();
     final data = await _read();
@@ -77,6 +79,7 @@ class UserPreferencesRepository {
     data['locationServicesEnabled'] = locationServicesEnabled;
     data['voiceAssistantEnabled'] = voiceAssistantEnabled;
     data['saveSearchHistory'] = saveSearchHistory;
+    data['isFirstLaunch'] = isFirstLaunch;
     
     await file.writeAsString(const JsonEncoder.withIndent('  ').convert(data), flush: true);
   }
@@ -106,6 +109,7 @@ class UserPreferencesRepository {
       'locationServicesEnabled': true,
       'voiceAssistantEnabled': true,
       'saveSearchHistory': true,
+      'isFirstLaunch': true,
     };
     
     await file.writeAsString(const JsonEncoder.withIndent('  ').convert(defaults), flush: true);
