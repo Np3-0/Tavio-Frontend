@@ -57,6 +57,7 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:label="restaurant_finder"
+        android:usesCleartextTraffic="true"
         tools:ignore="AllowBackup,GoogleAppIndexingWarning">
 
         <activity android:name="io.flutter.embedding.android.FlutterActivity"

@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:restaurantfinder/data/restaurant_data.dart';
 import 'package:restaurantfinder/data/user_preferences_repository.dart';
 import 'package:restaurantfinder/utils/app_colors.dart';
+import 'package:restaurantfinder/utils/API_endpoints.dart';
 import 'package:restaurantfinder/utils/permissions.dart';
 import 'package:restaurantfinder/widgets/allergy_dialog.dart';
 import 'package:restaurantfinder/widgets/find_menu.dart';
@@ -105,6 +106,11 @@ class _NavigationExampleState extends State<NavigationExample> {
   List<String> allergies = [];
   Map<String, String> allergyList = {};
   String permStatus = 'Checking...';
+  
+  // Restaurant data
+  List<Restaurant> nearbyRestaurants = [];
+  List<Restaurant> recommendedRestaurants = [];
+  bool loadingRestaurants = true;
 
   @override
   void initState() {
@@ -118,6 +124,8 @@ class _NavigationExampleState extends State<NavigationExample> {
     _checkPerms();
     _loadAllergies();
     await _loadSettings();
+    await _loadRestaurants();
+    await _loadRecommendedRestaurants();
     await _initVoiceAssistant();
     _scheduleRestart();
   }
@@ -236,6 +244,99 @@ class _NavigationExampleState extends State<NavigationExample> {
       saveSearchHistory: history,
       isFirstLaunch: false,
     );
+  }
+
+  Future<void> _loadRestaurants() async {
+    try {
+      setState(() => loadingRestaurants = true);
+      final data = await getRestaurants();
+      
+      if (!mounted) return;
+      
+      List<Restaurant> restaurants = [];
+      if (data is List) {
+        restaurants = data
+            .map((item) => Restaurant.fromJson(
+                item is Map<String, dynamic> ? item : {}))
+            .toList();
+      }
+      
+      // Sort by distance and take first 3
+      restaurants.sort((a, b) => a.distanceMiles.compareTo(b.distanceMiles));
+      final topThree = restaurants.take(3).toList();
+      
+      setState(() {
+        nearbyRestaurants = topThree.isEmpty ? defaultRestaurants : topThree;
+        loadingRestaurants = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        nearbyRestaurants = defaultRestaurants;
+        loadingRestaurants = false;
+      });
+      print('Error loading nearby restaurants: $e');
+    }
+  }
+
+  Future<void> _loadRecommendedRestaurants() async {
+    try {
+      final data = await getRecommendations(
+        cuisinePreferences: [],
+        dietaryRestrictions: [],
+        spicePreference: 'mild',
+        pricePreference: 'cheap',
+      );
+      
+      if (!mounted) return;
+      
+      List<Restaurant> restaurants = [];
+      if (data is List) {
+        restaurants = data
+            .map((item) => Restaurant.fromJson(
+                item is Map<String, dynamic> ? item : {}))
+            .toList();
+      }
+      
+      setState(() => recommendedRestaurants = restaurants);
+    } catch (e) {
+      print('Error loading recommended restaurants: $e');
+      setState(() => recommendedRestaurants = []);
+    }
+  }
+
+  Future<List<Restaurant>> _searchRestaurants(String query) async {
+    try {
+      final data = await discoverRestaurants(
+        query: query,
+        latitude: 0.0,
+        longitude: 0.0,
+        radiusMeters: 5000,
+        travelMode: 'DRIVE',
+      );
+      
+      List<Restaurant> restaurants = [];
+      if (data is List) {
+        restaurants = data
+            .map((item) => Restaurant.fromJson(
+                item is Map<String, dynamic> ? item : {}))
+            .toList();
+      } else if (data is Map<String, dynamic>) {
+        // Handle wrapped response
+        final restaurantList = data['restaurants'];
+        if (restaurantList is List) {
+          restaurants = restaurantList
+              .map((item) => Restaurant.fromJson(
+                  item is Map<String, dynamic> ? item : {}))
+              .toList();
+        }
+      }
+      
+      return restaurants;
+    } catch (e) {
+      print('Error searching restaurants: $e');
+      return [];
+    }
   }
 
   Future<void> _checkPerms() async {
@@ -493,7 +594,7 @@ class _NavigationExampleState extends State<NavigationExample> {
   Restaurant? _findRestaurantByName(String query) {
     final normalized = query.toLowerCase().trim();
     try {
-      return sampleRestaurants.firstWhere(
+      return nearbyRestaurants.firstWhere(
         (r) => r.name.toLowerCase().contains(normalized),
         orElse: () => throw StateError('not found'),
       );
@@ -504,7 +605,7 @@ class _NavigationExampleState extends State<NavigationExample> {
 
   List<Restaurant> _searchRestaurantsByCuisine(String cuisine) {
     final normalized = cuisine.toLowerCase().trim();
-    return sampleRestaurants
+    return nearbyRestaurants
         .where((r) => r.cuisine.toLowerCase().contains(normalized))
         .toList();
   }
@@ -531,7 +632,7 @@ class _NavigationExampleState extends State<NavigationExample> {
   }
 
   Future<void> _listRestaurants() async {
-    final names = sampleRestaurants.map((r) => r.name).join(', ');
+    final names = nearbyRestaurants.map((r) => r.name).join(', ');
     await _announce('Available restaurants: $names');
   }
 
@@ -617,7 +718,12 @@ class _NavigationExampleState extends State<NavigationExample> {
       ),
       body: SafeArea(
         child: [
-          FindMenu(userAllergies: allergies),
+          FindMenu(
+            userAllergies: allergies,
+            nearbyRestaurants: nearbyRestaurants,
+            recommendedRestaurants: recommendedRestaurants,
+            onSearch: _searchRestaurants,
+          ),
           SettingsMenu(
             notificationsEnabled: notifications,
             locationServicesEnabled: location,

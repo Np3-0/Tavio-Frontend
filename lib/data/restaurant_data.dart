@@ -6,6 +6,15 @@ class RestaurantMenuItem {
     required this.price,
   });
 
+  factory RestaurantMenuItem.fromJson(Map<String, dynamic> json) {
+    return RestaurantMenuItem(
+      name: json['name'] as String? ?? 'Unknown',
+      description: json['description'] as String? ?? '',
+      allergens: json['allergens'] as String? ?? 'None',
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
   final String name;
   final String description;
   final String allergens;
@@ -14,92 +23,58 @@ class RestaurantMenuItem {
 
 class Restaurant {
   const Restaurant({
+    required this.id,
     required this.name,
     required this.cuisine,
     required this.distanceMiles,
-    required this.menuItems,
+    this.menuItems = const [],
   });
 
+  factory Restaurant.fromJson(Map<String, dynamic> json) {
+    return Restaurant(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? 'Unknown',
+      cuisine: json['cuisine'] as String? ?? 'Unknown',
+      distanceMiles: (json['distance_miles'] as num?)?.toDouble() ?? 
+                     (json['distance'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
+  final String id;
   final String name;
   final String cuisine;
   final double distanceMiles;
   final List<RestaurantMenuItem> menuItems;
+
+  Restaurant copyWith({List<RestaurantMenuItem>? menuItems}) {
+    return Restaurant(
+      id: id,
+      name: name,
+      cuisine: cuisine,
+      distanceMiles: distanceMiles,
+      menuItems: menuItems ?? this.menuItems,
+    );
+  }
 }
 
-const List<Restaurant> sampleRestaurants = <Restaurant>[
+/// Default fallback restaurants when location is unavailable
+const List<Restaurant> defaultRestaurants = <Restaurant>[
   Restaurant(
+    id: '1',
     name: 'Food Place 1',
     cuisine: 'Italian',
     distanceMiles: 1.2,
-    menuItems: <RestaurantMenuItem>[
-      RestaurantMenuItem(
-        name: 'Margherita Pizza',
-        description: 'Classic tomato sauce, mozzarella, basil',
-        allergens: 'Gluten, Dairy',
-        price: 12.99,
-      ),
-      RestaurantMenuItem(
-        name: 'Pasta Alfredo',
-        description: 'Creamy parmesan sauce over fettuccine',
-        allergens: 'Gluten, Dairy',
-        price: 13.49,
-      ),
-      RestaurantMenuItem(
-        name: 'Tiramisu',
-        description: 'Espresso-soaked ladyfingers and mascarpone',
-        allergens: 'Gluten, Dairy, Eggs',
-        price: 6.75,
-      ),
-    ],
   ),
   Restaurant(
+    id: '2',
     name: 'Food Place 2',
     cuisine: 'American',
     distanceMiles: 2.0,
-    menuItems: <RestaurantMenuItem>[
-      RestaurantMenuItem(
-        name: 'Crispy Chicken Sandwich',
-        description: 'Lettuce, tomato, house aioli',
-        allergens: 'Gluten, Eggs',
-        price: 10.49,
-      ),
-      RestaurantMenuItem(
-        name: 'Loaded Fries',
-        description: 'Cheddar, bacon bits, green onion',
-        allergens: 'Dairy',
-        price: 7.25,
-      ),
-      RestaurantMenuItem(
-        name: 'Chocolate Brownie',
-        description: 'Served warm with vanilla ice cream',
-        allergens: 'Gluten, Dairy, Eggs',
-        price: 6.00,
-      ),
-    ],
   ),
   Restaurant(
+    id: '3',
     name: 'Green Bowl',
     cuisine: 'Healthy',
     distanceMiles: 0.8,
-    menuItems: <RestaurantMenuItem>[
-      RestaurantMenuItem(
-        name: 'Garden Salad',
-        description: 'Mixed greens, cucumber, vinaigrette',
-          allergens: 'None',
-        price: 8.25,
-      ),
-      RestaurantMenuItem(
-        name: 'Protein Power Bowl',
-        description: 'Quinoa, chickpeas, avocado, greens',
-        allergens: 'None',
-        price: 11.75,
-      ),
-      RestaurantMenuItem(
-        name: 'Fresh Fruit Cup',
-        description: 'Seasonal fruit medley',
-        allergens: 'None',
-        price: 5.50,
-      ),
-    ],
   ),
 ];
