@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:restaurantfinder/data/restaurant_data.dart';
 import 'package:restaurantfinder/data/user_preferences_repository.dart';
 import 'package:restaurantfinder/utils/app_colors.dart';
 import 'package:restaurantfinder/utils/API_endpoints.dart';
+import 'package:restaurantfinder/utils/menu_voice_context.dart';
 import 'package:restaurantfinder/utils/permissions.dart';
+import 'package:restaurantfinder/utils/speech_assistant.dart';
 import 'package:restaurantfinder/widgets/allergy_dialog.dart';
 import 'package:restaurantfinder/widgets/find_menu.dart';
 import 'package:restaurantfinder/widgets/restaurant_menu_page.dart';
 import 'package:restaurantfinder/widgets/settings_menu.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 void main() => runApp(const NavigationBarApp());
 
@@ -87,8 +86,9 @@ class NavigationExample extends StatefulWidget {
 
 class _NavigationExampleState extends State<NavigationExample> {
   final prefs = UserPreferencesRepository();
-  final stt.SpeechToText speech = stt.SpeechToText();
-  final FlutterTts tts = FlutterTts();
+  late final SpeechAssistant voiceAssistant;
+  AllergyDialogController? allergyDialogController;
+  bool allergyDialogOpen = false;
 
   int tab = 0;
   bool checkingPerms = false;
@@ -98,10 +98,6 @@ class _NavigationExampleState extends State<NavigationExample> {
   bool history = true;
   bool loadingAllergies = false;
   bool listening = false;
-  bool voiceReady = false;
-  bool speaking = false;
-  bool pausedByUser = false;
-  bool restartPending = false;
   String heardCommand = '';
   List<String> allergies = [];
   Map<String, String> allergyList = {};
@@ -115,6 +111,18 @@ class _NavigationExampleState extends State<NavigationExample> {
   @override
   void initState() {
     super.initState();
+    voiceAssistant = SpeechAssistant(
+      isVoiceEnabled: () => voice,
+      onFinalCommand: _handleVoiceCommand,
+      onListeningChanged: (isListening) {
+        if (!mounted) return;
+        setState(() => listening = isListening);
+      },
+      onHeardCommandChanged: (words) {
+        if (!mounted) return;
+        setState(() => heardCommand = words);
+      },
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _bootstrap();
     });
@@ -132,80 +140,16 @@ class _NavigationExampleState extends State<NavigationExample> {
 
   @override
   void dispose() {
-    speech.stop();
-    tts.stop();
+    voiceAssistant.dispose();
     super.dispose();
   }
 
-  Future<void> _initVoiceAssistant() async {
-    await tts.setLanguage('en-US');
-    await tts.setSpeechRate(0.46);
-    await tts.setVolume(1.0);
-    await tts.awaitSpeakCompletion(true);
+  Future<void> _initVoiceAssistant() async => voiceAssistant.init(context: context);
 
-    final available = await speech.initialize(
-      onStatus: _onSpeechStatus,
-      onError: (_) {
-        if (!mounted) return;
-        setState(() => listening = false);
-        _announce('I could not understand that. Please try again.');
-      },
-    );
+  void _scheduleRestart() => voiceAssistant.scheduleRestart(context);
 
-    if (!mounted) return;
-    setState(() => voiceReady = available);
-  }
-
-  void _onSpeechStatus(String status) {
-    if (!mounted) return;
-    final nowListening = status == 'listening';
-    if (listening != nowListening) {
-      setState(() => listening = nowListening);
-    }
-
-    final stopped = status == 'done' || status == 'notListening';
-    if (stopped) {
-      _scheduleRestart();
-    }
-  }
-
-  void _scheduleRestart() {
-    if (!mounted || restartPending || pausedByUser || speaking || !voice || !voiceReady) {
-      return;
-    }
-
-    if (speech.isListening || listening) return;
-    restartPending = true;
-
-    Future<void>.delayed(const Duration(milliseconds: 500), () async {
-      restartPending = false;
-      if (!mounted || pausedByUser || speaking || !voice || !voiceReady) return;
-      if (speech.isListening || listening) return;
-      await _startVoiceInput(announceStart: false);
-    });
-  }
-
-  Future<void> _announce(String message) async {
-    if (mounted) {
-      await SemanticsService.sendAnnouncement(
-        View.of(context),
-        message,
-        Directionality.of(context),
-      );
-    }
-    if (!voice) return;
-
-    if (speech.isListening || listening) {
-      await speech.stop();
-      if (mounted) setState(() => listening = false);
-    }
-
-    speaking = true;
-    await tts.stop();
-    await tts.speak(message);
-    speaking = false;
-    _scheduleRestart();
-  }
+  Future<void> _announce(String message) async =>
+      voiceAssistant.announce(message, context: context);
 
   Future<void> _loadAllergies() async {
     setState(() => loadingAllergies = true);
@@ -258,17 +202,15 @@ class _NavigationExampleState extends State<NavigationExample> {
             item is Map<String, dynamic> ? item : {}))
           .toList();
       
-      if (location) {
-        // Only sort if distance values are provided; otherwise preserve backend order.
-        final hasDistance = restaurants.any((r) => r.distanceMiles > 0);
-        if (hasDistance) {
-          restaurants.sort((a, b) => a.distanceMiles.compareTo(b.distanceMiles));
-        }
+      final hasDistance = restaurants.any((r) => r.distanceMiles > 0);
+      if (location && hasDistance) {
+        restaurants.sort((a, b) => a.distanceMiles.compareTo(b.distanceMiles));
+      } else {
+        restaurants.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       }
-      final topThree = restaurants.take(3).toList();
       
       setState(() {
-        nearbyRestaurants = topThree.isEmpty ? defaultRestaurants : topThree;
+        nearbyRestaurants = restaurants.isEmpty ? defaultRestaurants : restaurants;
         loadingRestaurants = false;
       });
     } catch (e) {
@@ -321,41 +263,29 @@ class _NavigationExampleState extends State<NavigationExample> {
 
   Future<List<Restaurant>> _searchRestaurants(String query) async {
     try {
-      final data = await discoverRestaurants(
-        query: query,
-        latitude: 0.0,
-        longitude: 0.0,
-        radiusMeters: 5000,
-        travelMode: 'DRIVE',
-      );
-      
-        final restaurants = data
+      final data = await getRestaurants();
+      final normalized = query.toLowerCase().trim();
+
+      final restaurants = data
           .map((item) => Restaurant.fromJson(
             item is Map<String, dynamic> ? item : {}))
+          .where((r) => r.id.isNotEmpty)
           .toList();
 
-      if (restaurants.isNotEmpty) {
-        return restaurants;
+      final nameMatches = restaurants
+          .where((r) => r.name.toLowerCase().contains(normalized))
+          .toList();
+      if (nameMatches.isNotEmpty) {
+        return nameMatches;
       }
 
-      final normalized = query.toLowerCase();
-      final localPool = <Restaurant>{
-        ...nearbyRestaurants,
-        ...recommendedRestaurants,
-      };
-      return localPool
-          .where((r) =>
-              r.name.toLowerCase().contains(normalized) ||
-              r.cuisine.toLowerCase().contains(normalized))
+      final cuisineMatches = restaurants
+          .where((r) => r.cuisine.toLowerCase().contains(normalized))
           .toList();
+      return cuisineMatches;
     } catch (e) {
       debugPrint('Error searching restaurants: $e');
-      final normalized = query.toLowerCase();
-      return nearbyRestaurants
-          .where((r) =>
-              r.name.toLowerCase().contains(normalized) ||
-              r.cuisine.toLowerCase().contains(normalized))
-          .toList();
+      return <Restaurant>[];
     }
   }
 
@@ -379,64 +309,13 @@ class _NavigationExampleState extends State<NavigationExample> {
     });
   }
 
-  Future<void> _startVoiceInput({bool announceStart = true}) async {
-    if (!voice) {
-      await _announce('Voice assistant is disabled in settings.');
-      return;
-    }
+  Future<void> _startVoiceInput({bool announceStart = true}) async =>
+      voiceAssistant.startVoiceInput(
+        context: context,
+        announceStart: announceStart,
+      );
 
-    if (!voiceReady) {
-      await _initVoiceAssistant();
-      if (!voiceReady) {
-        await _announce('Voice input is unavailable on this device.');
-        return;
-      }
-    }
-
-    final mic = await Permission.microphone.request();
-    if (mic != PermissionStatus.granted) {
-      await _announce('Microphone permission is required for voice control.');
-      return;
-    }
-
-    pausedByUser = false;
-
-    if (speech.isListening || listening) {
-      return;
-    }
-
-    if (announceStart) {
-      await _announce('Listening for commands.');
-    }
-
-    if (mounted) {
-      setState(() {
-        heardCommand = '';
-        listening = true;
-      });
-    }
-
-    await speech.listen(
-      listenOptions: stt.SpeechListenOptions(
-        listenMode: stt.ListenMode.confirmation,
-        partialResults: true,
-      ),
-      onResult: (result) {
-        if (!mounted || result.recognizedWords.isEmpty) return;
-        setState(() => heardCommand = result.recognizedWords);
-        if (result.finalResult) {
-          speech.stop();
-          _handleVoiceCommand(result.recognizedWords);
-        }
-      },
-    );
-  }
-
-  Future<void> _pauseVoiceInput() async {
-    pausedByUser = true;
-    await speech.stop();
-    if (mounted) setState(() => listening = false);
-  }
+  Future<void> _pauseVoiceInput() async => voiceAssistant.pause();
 
   Future<void> _toggleVoiceInput() async {
     if (!voice) {
@@ -444,7 +323,7 @@ class _NavigationExampleState extends State<NavigationExample> {
       return;
     }
 
-    if (speech.isListening || listening) {
+    if (voiceAssistant.isListening) {
       await _pauseVoiceInput();
       await _announce('Voice control paused.');
       return;
@@ -470,14 +349,11 @@ class _NavigationExampleState extends State<NavigationExample> {
     await _saveSettings();
 
     if (!value) {
-      pausedByUser = true;
-      await speech.stop();
-      if (mounted) setState(() => listening = false);
+      await _pauseVoiceInput();
       await _announce('Voice assistant disabled.');
       return;
     }
 
-    pausedByUser = false;
     await _announce('Voice assistant enabled.');
     _scheduleRestart();
   }
@@ -510,6 +386,14 @@ class _NavigationExampleState extends State<NavigationExample> {
     final disable = command.contains('turn off') || command.contains('disable');
     final toggle = command.contains('toggle');
 
+    if (await _handleMenuVoiceCommand(command)) {
+      return;
+    }
+
+    if (await _handleAllergyVoiceCommand(command)) {
+      return;
+    }
+
     if (command == 'close' || command == 'close menu' || command == 'exit menu') {
       await _closeCurrentScreen();
       return;
@@ -517,9 +401,9 @@ class _NavigationExampleState extends State<NavigationExample> {
 
     if (command.contains('help') || command.contains('what can i say')) {
       await _announce(
-        'You can say: go to find, go to settings, open allergies, refresh permissions, '
-        'turn on notifications, turn off location, toggle voice assistant, toggle search history, reset preferences, '
-        'open restaurant name, list restaurants, search cuisine type, or close menu.',
+        'You can say: go to find, go to settings, open allergies, add allergy name, remove allergy name, refresh permissions, '
+        'turn on notifications, turn off location, toggle voice input, toggle search history, reset preferences, '
+        'open restaurant name, list restaurants, search restaurant name or cuisine, save allergies, or close menu.',
       );
       return;
     }
@@ -536,8 +420,15 @@ class _NavigationExampleState extends State<NavigationExample> {
     }
 
     if (command.startsWith('search ') || command.contains('search for')) {
-      final cuisineQuery = command.replaceAll('search ', '').replaceAll('search for ', '').trim();
-      await _searchByCuisine(cuisineQuery);
+      final searchQuery = command
+          .replaceFirst('search for ', '')
+          .replaceFirst('search ', '')
+          .trim();
+      if (searchQuery.isEmpty) {
+        await _announce('Please say what to search for. You can search by restaurant name or cuisine.');
+        return;
+      }
+      await _searchByQuery(searchQuery);
       return;
     }
 
@@ -579,7 +470,7 @@ class _NavigationExampleState extends State<NavigationExample> {
       if (disable) return _setLocation(false);
     }
 
-    if (command.contains('voice assistant')) {
+    if (command.contains('voice assistant') || command.contains('voice input')) {
       if (toggle) return _setVoiceAssistant(!voice);
       if (enable) return _setVoiceAssistant(true);
       if (disable) return _setVoiceAssistant(false);
@@ -612,22 +503,78 @@ class _NavigationExampleState extends State<NavigationExample> {
   }
 
   Restaurant? _findRestaurantByName(String query) {
-    final normalized = query.toLowerCase().trim();
-    try {
-      return nearbyRestaurants.firstWhere(
-        (r) => r.name.toLowerCase().contains(normalized),
-        orElse: () => throw StateError('not found'),
+    final normalizedQuery = _normalizeForMatching(query);
+    if (normalizedQuery.isEmpty) return null;
+
+    final localPool = <Restaurant>{
+      ...nearbyRestaurants,
+      ...recommendedRestaurants,
+    }.toList();
+
+    Restaurant? best;
+    int bestScore = 0;
+
+    for (final restaurant in localPool) {
+      final score = _scoreRestaurantNameMatch(
+        _normalizeForMatching(restaurant.name),
+        normalizedQuery,
       );
-    } catch (_) {
-      return null;
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = restaurant;
+      }
     }
+
+    // Require at least a weak token or substring match to avoid random opens.
+    if (bestScore < 40) return null;
+    return best;
   }
 
-  List<Restaurant> _searchRestaurantsByCuisine(String cuisine) {
-    final normalized = cuisine.toLowerCase().trim();
-    return nearbyRestaurants
-        .where((r) => r.cuisine.toLowerCase().contains(normalized))
-        .toList();
+  String _normalizeForMatching(String input) {
+    final lower = input.toLowerCase();
+    final folded = lower
+        .replaceAll(RegExp(r'[àáâãäåāăą]'), 'a')
+        .replaceAll(RegExp(r'[çćĉċč]'), 'c')
+        .replaceAll(RegExp(r'[ďđ]'), 'd')
+        .replaceAll(RegExp(r'[èéêëēĕėęě]'), 'e')
+        .replaceAll(RegExp(r'[ĝğġģ]'), 'g')
+        .replaceAll(RegExp(r'[ĥħ]'), 'h')
+        .replaceAll(RegExp(r'[ìíîïĩīĭįı]'), 'i')
+        .replaceAll(RegExp(r'[ĵ]'), 'j')
+        .replaceAll(RegExp(r'[ķ]'), 'k')
+        .replaceAll(RegExp(r'[ĺļľł]'), 'l')
+        .replaceAll(RegExp(r'[ñńņň]'), 'n')
+        .replaceAll(RegExp(r'[òóôõöøōŏő]'), 'o')
+        .replaceAll(RegExp(r'[ŕŗř]'), 'r')
+        .replaceAll(RegExp(r'[śŝşš]'), 's')
+        .replaceAll(RegExp(r'[ţťŧ]'), 't')
+        .replaceAll(RegExp(r'[ùúûüũūŭůűų]'), 'u')
+        .replaceAll(RegExp(r'[ýÿŷ]'), 'y')
+        .replaceAll(RegExp(r'[źżž]'), 'z')
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    return folded;
+  }
+
+  int _scoreRestaurantNameMatch(String candidate, String query) {
+    if (candidate == query) return 100;
+    if (candidate.contains(query) || query.contains(candidate)) return 80;
+
+    final candidateTokens = candidate.split(' ').where((t) => t.isNotEmpty).toSet();
+    final queryTokens = query.split(' ').where((t) => t.isNotEmpty).toSet();
+    if (candidateTokens.isEmpty || queryTokens.isEmpty) return 0;
+
+    final overlap = candidateTokens.where(queryTokens.contains).length;
+    final tokenScore = (overlap / queryTokens.length * 70).round();
+
+    final prefixBoost = candidateTokens.any((t) => queryTokens.any((q) => t.startsWith(q) || q.startsWith(t)))
+        ? 20
+        : 0;
+
+    return tokenScore + prefixBoost;
   }
 
   Future<void> _openRestaurantByName(String restaurantName) async {
@@ -656,10 +603,11 @@ class _NavigationExampleState extends State<NavigationExample> {
     await _announce('Available restaurants: $names');
   }
 
-  Future<void> _searchByCuisine(String cuisine) async {
-    final results = _searchRestaurantsByCuisine(cuisine);
+  Future<void> _searchByQuery(String query) async {
+    final results = await _searchRestaurants(query);
+
     if (results.isEmpty) {
-      await _announce('No restaurants found with $cuisine cuisine.');
+      await _announce('No restaurants found matching $query.');
       return;
     }
 
@@ -674,22 +622,138 @@ class _NavigationExampleState extends State<NavigationExample> {
       if (!mounted || allergyList.isEmpty) return;
     }
 
-    final result = await showAllergyDialog(
-      context: context,
-      initialAllergies: allergies,
+    final controller = AllergyDialogController(
       allowedAllergyLookup: allergyList,
+      initialAllergies: allergies,
     );
+    allergyDialogController = controller;
+    allergyDialogOpen = true;
 
-    if (!mounted || result == null) return;
+    try {
+      final result = await showAllergyDialog(
+        context: context,
+        initialAllergies: allergies,
+        allowedAllergyLookup: allergyList,
+        controller: controller,
+      );
 
-    setState(() => allergies = result);
-    await prefs.saveAllergies(result);
+      if (!mounted || result == null) return;
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(
-        result.isEmpty ? 'No allergies set.' : 'Got it: ${result.join(', ')}',
-      )),
+      setState(() => allergies = result);
+      await prefs.saveAllergies(result);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(
+          result.isEmpty ? 'No allergies set.' : 'Got it: ${result.join(', ')}',
+        )),
+      );
+    } finally {
+      allergyDialogOpen = false;
+      allergyDialogController = null;
+    }
+  }
+
+  Future<bool> _handleAllergyVoiceCommand(String command) async {
+    if (!allergyDialogOpen || allergyDialogController == null) {
+      return false;
+    }
+
+    if (command == 'save' || command == 'save allergies' || command == 'done') {
+      final result = allergyDialogController!.allergies;
+      Navigator.of(context, rootNavigator: true).pop(result);
+      await _announce('Saved allergies.');
+      return true;
+    }
+
+    final match = RegExp(r'^(add|remove)\s+(.+)$').firstMatch(command);
+    if (match == null) return false;
+
+    final action = match.group(1)!;
+    final allergyName = match.group(2)!.trim();
+    if (allergyName.isEmpty) return false;
+
+    final controller = allergyDialogController!;
+    final success = action == 'add'
+        ? controller.addAllergy(allergyName)
+        : controller.removeAllergy(allergyName);
+
+    if (success) {
+      await _announce('${action == 'add' ? 'Added' : 'Removed'} $allergyName.');
+    } else {
+      await _announce('I could not ${action == 'add' ? 'add' : 'remove'} $allergyName.');
+    }
+
+    return true;
+  }
+
+  Future<bool> _handleMenuVoiceCommand(String command) async {
+    final menuContext = MenuVoiceContext.instance;
+    if (!menuContext.isActive) return false;
+
+    if (command == 'list' || command == 'list items' || command == 'items') {
+      await _announceMenuItems(menuContext);
+      return true;
+    }
+
+    final detailsMatch = RegExp(
+      r'^(details for menu item|details for|details)\s+(.+)$',
+    ).firstMatch(command);
+    if (detailsMatch == null) return false;
+
+    final itemQuery = detailsMatch.group(2)?.trim() ?? '';
+    if (itemQuery.isEmpty) {
+      await _announce('Please say the menu item name after details for.');
+      return true;
+    }
+
+    await _announceMenuItemDetails(menuContext, itemQuery);
+    return true;
+  }
+
+  Future<void> _announceMenuItems(MenuVoiceContext menuContext) async {
+    if (menuContext.menuItems.isEmpty) {
+      await _announce('I do not have menu items loaded yet for ${menuContext.restaurantName}.');
+      return;
+    }
+
+    final titles = menuContext.menuItems.map((item) => item.name).join(', ');
+    await _announce('Menu items at ${menuContext.restaurantName}: $titles');
+  }
+
+  Future<void> _announceMenuItemDetails(
+    MenuVoiceContext menuContext,
+    String itemQuery,
+  ) async {
+    if (menuContext.menuItems.isEmpty) {
+      await _announce('I do not have menu items loaded yet for ${menuContext.restaurantName}.');
+      return;
+    }
+
+    final normalizedQuery = _normalizeForMatching(itemQuery);
+    RestaurantMenuItem? best;
+    int bestScore = 0;
+
+    for (final item in menuContext.menuItems) {
+      final score = _scoreRestaurantNameMatch(
+        _normalizeForMatching(item.name),
+        normalizedQuery,
+      );
+      if (score > bestScore) {
+        bestScore = score;
+        best = item;
+      }
+    }
+
+    if (best == null || bestScore < 40) {
+      await _announce('I could not find a menu item matching $itemQuery.');
+      return;
+    }
+
+    final description = best.description.isEmpty ? 'No description provided.' : best.description;
+    final allergens = best.allergens.isEmpty ? 'None listed.' : best.allergens;
+    await _announce(
+      'Details for ${best.name}: Description: $description Allergens: $allergens Price: ${best.price.toStringAsFixed(2)} dollars.',
     );
   }
 

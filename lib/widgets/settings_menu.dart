@@ -1,6 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:restaurantfinder/utils/app_colors.dart';
 
+const List<String> _voiceCommands = [
+  'help',
+  'go to find',
+  'go to settings',
+  'open allergies / set allergies / set allergens',
+  'add <allergy>',
+  'remove <allergy>',
+  'save allergies / save / done',
+  'refresh permissions / check permissions',
+  'turn on notifications / turn off notifications / toggle notifications',
+  'turn on location / turn off location / toggle location',
+  'toggle voice input',
+  'toggle search history',
+  'turn on voice input / turn off voice input',
+  'turn on search history / turn off search history',
+  'search <restaurant name or cuisine>',
+  'search for <restaurant name or cuisine>',
+  'open <restaurant name>',
+  'list restaurants / restaurants',
+  'list items / items / list',
+  'details for <menu item>',
+  'close / close menu / exit menu',
+  'reset / default',
+];
+
 class SettingsMenu extends StatelessWidget {
   const SettingsMenu({
     required this.notificationsEnabled,
@@ -69,8 +94,8 @@ class SettingsMenu extends StatelessWidget {
                 ),
                 _ToggleSetting(
                   icon: Icons.mic,
-                  title: 'Voice Assistant',
-                  subtitle: 'Use voice commands.',
+                  title: 'Voice Input',
+                  subtitle: 'Use voice commands. Turn it off to disable speech recognition.',
                   value: voiceAssistantEnabled,
                   onChanged: onVoiceAssistantChanged,
                 ),
@@ -124,6 +149,20 @@ class SettingsMenu extends StatelessWidget {
                     title: const Text('Reset Everything'),
                     subtitle: const Text('Back to how it started.'),
                     onTap: onResetPreferences,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Voice Commands', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 10),
+                        ..._voiceCommands.map((command) => Text('• $command')),
+                      ],
+                    ),
                   ),
                 ),
               ],

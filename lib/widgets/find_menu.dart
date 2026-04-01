@@ -28,6 +28,48 @@ class _FindMenuState extends State<FindMenu> {
   bool isSearching = false;
   String currentQuery = '';
 
+  List<Restaurant> _sortedRestaurants(List<Restaurant> restaurants) {
+    final sorted = [...restaurants];
+    final hasDistance = sorted.any((restaurant) => restaurant.distanceMiles > 0);
+
+    if (hasDistance) {
+      sorted.sort((a, b) => a.distanceMiles.compareTo(b.distanceMiles));
+    } else {
+      sorted.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    }
+
+    return sorted;
+  }
+
+  String _distanceText(Restaurant restaurant) {
+    if (restaurant.distanceMiles <= 0) return 'Distance unavailable';
+    return '${restaurant.distanceMiles.toStringAsFixed(1)} mi away';
+  }
+
+  Widget _restaurantTile({
+    required ThemeData theme,
+    required Restaurant restaurant,
+    required IconData icon,
+  }) {
+    return Card(
+      child: ListTile(
+        minVerticalPadding: 14,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        leading: CircleAvatar(
+          backgroundColor: const Color(0xFFDDEAFF),
+          child: Icon(icon, color: AppColors.Ocean),
+        ),
+        title: Text(restaurant.name, style: theme.textTheme.titleMedium),
+        subtitle: Text(
+          '${restaurant.cuisine} • ${_distanceText(restaurant)}',
+          style: theme.textTheme.bodyMedium,
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => _openRestaurant(restaurant),
+      ),
+    );
+  }
+
   Future<void> _handleSearch(String query) async {
     setState(() {
       currentQuery = query;
@@ -74,8 +116,10 @@ class _FindMenuState extends State<FindMenu> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final displayRestaurants =
-        currentQuery.isEmpty ? widget.nearbyRestaurants : searchResults;
+    final displayRestaurants = currentQuery.isEmpty
+      ? _sortedRestaurants(widget.nearbyRestaurants)
+      : _sortedRestaurants(searchResults);
+    final recommendedRestaurants = _sortedRestaurants(widget.recommendedRestaurants);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
@@ -99,7 +143,7 @@ class _FindMenuState extends State<FindMenu> {
             child: isSearching
                 ? const Center(child: CircularProgressIndicator())
                 : currentQuery.isEmpty
-                    ? _buildNearbyAndRecommended(theme, displayRestaurants)
+                    ? _buildNearbyAndRecommended(theme, displayRestaurants, recommendedRestaurants)
                     : _buildSearchResults(theme, displayRestaurants),
           ),
         ],
@@ -108,7 +152,10 @@ class _FindMenuState extends State<FindMenu> {
   }
 
   Widget _buildNearbyAndRecommended(
-      ThemeData theme, List<Restaurant> nearbyList) {
+      ThemeData theme,
+      List<Restaurant> nearbyList,
+      List<Restaurant> recommendedList,
+      ) {
     return ListView(
       children: [
         Text('What\'s near you', style: theme.textTheme.titleLarge),
@@ -120,68 +167,35 @@ class _FindMenuState extends State<FindMenu> {
                 style: theme.textTheme.bodyMedium),
           )
         else
-          SizedBox(
-            height: 250,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: nearbyList.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemBuilder: (_, i) {
-                final restaurant = nearbyList[i];
-                return SizedBox(
-                  width: 280,
-                  child: Card(
-                    child: ListTile(
-                      minVerticalPadding: 14,
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      leading: const CircleAvatar(
-                        backgroundColor: Color(0xFFDDEAFF),
-                        child: Icon(Icons.dining, color: AppColors.Ocean),
-                      ),
-                      title: Text(restaurant.name,
-                          style: theme.textTheme.titleMedium),
-                      subtitle: Text(
-                        '${restaurant.cuisine} • ${restaurant.distanceMiles.toStringAsFixed(1)} mi',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => _openRestaurant(restaurant),
-                    ),
-                  ),
-                );
-              },
-            ),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: nearbyList.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
+            itemBuilder: (_, i) {
+              final restaurant = nearbyList[i];
+              return _restaurantTile(
+                theme: theme,
+                restaurant: restaurant,
+                icon: Icons.dining,
+              );
+            },
           ),
         const SizedBox(height: 30),
-        if (widget.recommendedRestaurants.isNotEmpty) ...[
+        if (recommendedList.isNotEmpty) ...[
           Text('Recommended for you', style: theme.textTheme.titleLarge),
           const SizedBox(height: 10),
           ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: widget.recommendedRestaurants.length,
+            itemCount: recommendedList.length,
             separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (_, i) {
-              final restaurant = widget.recommendedRestaurants[i];
-              return Card(
-                child: ListTile(
-                  minVerticalPadding: 14,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0xFFDDEAFF),
-                    child: Icon(Icons.favorite, color: AppColors.Ocean),
-                  ),
-                  title: Text(restaurant.name,
-                      style: theme.textTheme.titleMedium),
-                  subtitle: Text(
-                    '${restaurant.cuisine} • ${restaurant.distanceMiles.toStringAsFixed(1)} mi',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _openRestaurant(restaurant),
-                ),
+              final restaurant = recommendedList[i];
+              return _restaurantTile(
+                theme: theme,
+                restaurant: restaurant,
+                icon: Icons.favorite,
               );
             },
           ),
@@ -210,24 +224,10 @@ class _FindMenuState extends State<FindMenu> {
               separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (_, i) {
                 final restaurant = results[i];
-                return Card(
-                  child: ListTile(
-                    minVerticalPadding: 14,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 6),
-                    leading: const CircleAvatar(
-                      backgroundColor: Color(0xFFDDEAFF),
-                      child: Icon(Icons.dining, color: AppColors.Ocean),
-                    ),
-                    title: Text(restaurant.name,
-                        style: theme.textTheme.titleMedium),
-                    subtitle: Text(
-                      '${restaurant.cuisine} • ${restaurant.distanceMiles.toStringAsFixed(1)} mi',
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _openRestaurant(restaurant),
-                  ),
+                return _restaurantTile(
+                  theme: theme,
+                  restaurant: restaurant,
+                  icon: Icons.dining,
                 );
               },
             ),

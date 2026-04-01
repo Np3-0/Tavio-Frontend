@@ -30,6 +30,12 @@ class RestaurantMenuItem {
   final double price;
 }
 
+double _parseDistanceValue(dynamic value) {
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value) ?? 0.0;
+  return 0.0;
+}
+
 class Restaurant {
   const Restaurant({
     required this.id,
@@ -45,10 +51,12 @@ class Restaurant {
     final rawDistanceMeters = json['distance_meters'];
 
     double distanceMiles = 0.0;
-    if (rawDistanceMiles is num) {
-      distanceMiles = rawDistanceMiles.toDouble();
-    } else if (rawDistanceMeters is num) {
-      distanceMiles = rawDistanceMeters.toDouble() / 1609.344;
+    final parsedMiles = _parseDistanceValue(rawDistanceMiles);
+    final parsedMeters = _parseDistanceValue(rawDistanceMeters);
+    if (parsedMiles > 0) {
+      distanceMiles = parsedMiles;
+    } else if (parsedMeters > 0) {
+      distanceMiles = parsedMeters / 1609.344;
     }
 
     return Restaurant(
