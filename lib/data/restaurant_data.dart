@@ -7,11 +7,20 @@ class RestaurantMenuItem {
   });
 
   factory RestaurantMenuItem.fromJson(Map<String, dynamic> json) {
+    final rawAllergens = json['allergens'] ?? json['dietary_info'];
+    final allergens = switch (rawAllergens) {
+      String value => value,
+      List value => value.whereType<String>().join(', '),
+      _ => 'None',
+    };
+
+    final rawPrice = json['price'] ?? json['item_price'];
+
     return RestaurantMenuItem(
-      name: json['name'] as String? ?? 'Unknown',
+      name: (json['name'] ?? json['item_name'] ?? 'Unknown') as String,
       description: json['description'] as String? ?? '',
-      allergens: json['allergens'] as String? ?? 'None',
-      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      allergens: allergens.isEmpty ? 'None' : allergens,
+      price: (rawPrice as num?)?.toDouble() ?? 0.0,
     );
   }
 
@@ -31,12 +40,22 @@ class Restaurant {
   });
 
   factory Restaurant.fromJson(Map<String, dynamic> json) {
+    final rawId = json['id'];
+    final rawDistanceMiles = json['distance_miles'] ?? json['distance'];
+    final rawDistanceMeters = json['distance_meters'];
+
+    double distanceMiles = 0.0;
+    if (rawDistanceMiles is num) {
+      distanceMiles = rawDistanceMiles.toDouble();
+    } else if (rawDistanceMeters is num) {
+      distanceMiles = rawDistanceMeters.toDouble() / 1609.344;
+    }
+
     return Restaurant(
-      id: json['id'] as String? ?? '',
+      id: rawId?.toString() ?? '',
       name: json['name'] as String? ?? 'Unknown',
-      cuisine: json['cuisine'] as String? ?? 'Unknown',
-      distanceMiles: (json['distance_miles'] as num?)?.toDouble() ?? 
-                     (json['distance'] as num?)?.toDouble() ?? 0.0,
+      cuisine: (json['cuisine'] ?? json['cuisine_type'] ?? 'Unknown') as String,
+      distanceMiles: distanceMiles,
     );
   }
 

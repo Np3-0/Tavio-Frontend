@@ -18,7 +18,7 @@ class RestaurantMenuPage extends StatefulWidget {
 }
 
 class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
-  late Future<dynamic> _menuFuture;
+  late Future<List<dynamic>> _menuFuture;
 
   @override
   void initState() {
@@ -63,7 +63,7 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
         backgroundColor: AppColors.Onyx,
         iconTheme: const IconThemeData(color: AppColors.Alabaster),
       ),
-      body: FutureBuilder<dynamic>(
+      body: FutureBuilder<List<dynamic>>(
         future: _menuFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -77,7 +77,7 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
             );
           }
 
-          final items = _parseMenuItems(snapshot.data ?? []);
+          final items = _parseMenuItems(snapshot.data ?? <dynamic>[]);
           final visible = items
               .where((item) => !_isBlocked(item.allergens))
               .toList();

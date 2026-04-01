@@ -59,7 +59,7 @@ flutter build ios
 URL in `lib/utils/API_endpoints.dart`:
 
 ```dart
-const String URL = 'http://44.222.171.66';
+const String URL = 'http://44.222.171.66:8000';
 ```
 
 If your backend URL changes, update this value before running.

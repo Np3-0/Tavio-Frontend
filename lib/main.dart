@@ -122,7 +122,7 @@ class _NavigationExampleState extends State<NavigationExample> {
 
   Future<void> _bootstrap() async {
     _checkPerms();
-    _loadAllergies();
+    await _loadAllergies();
     await _loadSettings();
     await _loadRestaurants();
     await _loadRecommendedRestaurants();
@@ -253,16 +253,18 @@ class _NavigationExampleState extends State<NavigationExample> {
       
       if (!mounted) return;
       
-      List<Restaurant> restaurants = [];
-      if (data is List) {
-        restaurants = data
-            .map((item) => Restaurant.fromJson(
-                item is Map<String, dynamic> ? item : {}))
-            .toList();
-      }
+        final restaurants = data
+          .map((item) => Restaurant.fromJson(
+            item is Map<String, dynamic> ? item : {}))
+          .toList();
       
-      // Sort by distance and take first 3
-      restaurants.sort((a, b) => a.distanceMiles.compareTo(b.distanceMiles));
+      if (location) {
+        // Only sort if distance values are provided; otherwise preserve backend order.
+        final hasDistance = restaurants.any((r) => r.distanceMiles > 0);
+        if (hasDistance) {
+          restaurants.sort((a, b) => a.distanceMiles.compareTo(b.distanceMiles));
+        }
+      }
       final topThree = restaurants.take(3).toList();
       
       setState(() {
@@ -275,7 +277,7 @@ class _NavigationExampleState extends State<NavigationExample> {
         nearbyRestaurants = defaultRestaurants;
         loadingRestaurants = false;
       });
-      print('Error loading nearby restaurants: $e');
+      debugPrint('Error loading nearby restaurants: $e');
     }
   }
 
@@ -284,23 +286,35 @@ class _NavigationExampleState extends State<NavigationExample> {
       final data = await getRecommendations(
         cuisinePreferences: [],
         dietaryRestrictions: [],
+        allergenExclusions: allergies,
         spicePreference: 'mild',
         pricePreference: 'cheap',
       );
       
       if (!mounted) return;
       
-      List<Restaurant> restaurants = [];
-      if (data is List) {
-        restaurants = data
-            .map((item) => Restaurant.fromJson(
-                item is Map<String, dynamic> ? item : {}))
-            .toList();
-      }
+      final restaurants = data
+          .map((item) {
+            if (item is! Map<String, dynamic>) {
+              return const Restaurant(
+                id: '',
+                name: 'Unknown',
+                cuisine: 'Unknown',
+                distanceMiles: 0.0,
+              );
+            }
+            final restaurantJson =
+                item['restaurant'] is Map<String, dynamic>
+                    ? item['restaurant'] as Map<String, dynamic>
+                    : item;
+            return Restaurant.fromJson(restaurantJson);
+          })
+          .where((r) => r.id.isNotEmpty || r.name != 'Unknown')
+          .toList();
       
       setState(() => recommendedRestaurants = restaurants);
     } catch (e) {
-      print('Error loading recommended restaurants: $e');
+      debugPrint('Error loading recommended restaurants: $e');
       setState(() => recommendedRestaurants = []);
     }
   }
@@ -315,27 +329,33 @@ class _NavigationExampleState extends State<NavigationExample> {
         travelMode: 'DRIVE',
       );
       
-      List<Restaurant> restaurants = [];
-      if (data is List) {
-        restaurants = data
-            .map((item) => Restaurant.fromJson(
-                item is Map<String, dynamic> ? item : {}))
-            .toList();
-      } else if (data is Map<String, dynamic>) {
-        // Handle wrapped response
-        final restaurantList = data['restaurants'];
-        if (restaurantList is List) {
-          restaurants = restaurantList
-              .map((item) => Restaurant.fromJson(
-                  item is Map<String, dynamic> ? item : {}))
-              .toList();
-        }
+        final restaurants = data
+          .map((item) => Restaurant.fromJson(
+            item is Map<String, dynamic> ? item : {}))
+          .toList();
+
+      if (restaurants.isNotEmpty) {
+        return restaurants;
       }
-      
-      return restaurants;
+
+      final normalized = query.toLowerCase();
+      final localPool = <Restaurant>{
+        ...nearbyRestaurants,
+        ...recommendedRestaurants,
+      };
+      return localPool
+          .where((r) =>
+              r.name.toLowerCase().contains(normalized) ||
+              r.cuisine.toLowerCase().contains(normalized))
+          .toList();
     } catch (e) {
-      print('Error searching restaurants: $e');
-      return [];
+      debugPrint('Error searching restaurants: $e');
+      final normalized = query.toLowerCase();
+      return nearbyRestaurants
+          .where((r) =>
+              r.name.toLowerCase().contains(normalized) ||
+              r.cuisine.toLowerCase().contains(normalized))
+          .toList();
     }
   }
 
