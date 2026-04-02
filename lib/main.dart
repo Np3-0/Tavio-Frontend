@@ -360,7 +360,7 @@ class _NavigationExampleState extends State<NavigationExample> {
 
   String? _extractSpokenReason(dynamic item) {
     if (item is! Map<String, dynamic>) return null;
-    final reason = item['spoken_reason'];
+    final reason = item['spoken_response'];
     if (reason is String && reason.isNotEmpty) {
       debugPrint('Extracted spoken reason: $reason');
       return reason;
