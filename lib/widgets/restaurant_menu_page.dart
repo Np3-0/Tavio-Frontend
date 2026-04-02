@@ -8,11 +8,15 @@ class RestaurantMenuPage extends StatefulWidget {
   const RestaurantMenuPage({
     required this.restaurant,
     required this.userAllergies,
+    this.spokenReason,
+    this.onAnnounce,
     super.key,
   });
 
   final Restaurant restaurant;
   final List<String> userAllergies;
+  final String? spokenReason;
+  final Future<void> Function(String)? onAnnounce;
 
   @override
   State<RestaurantMenuPage> createState() => _RestaurantMenuPageState();
@@ -31,6 +35,19 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
       restaurantName: widget.restaurant.name,
       menuItems: const [],
     );
+
+    // Announce the recommendation reason if provided
+    if (widget.spokenReason != null && 
+        widget.spokenReason!.isNotEmpty && 
+        widget.onAnnounce != null) {
+      debugPrint('Menu page will announce reason: "${widget.spokenReason}"');
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        debugPrint('Menu page announcing reason now...');
+        await widget.onAnnounce!(widget.spokenReason!);
+      });
+    } else {
+      debugPrint('Menu page skipping announcement - reason: ${widget.spokenReason}, hasCallback: ${widget.onAnnounce != null}');
+    }
   }
 
   @override

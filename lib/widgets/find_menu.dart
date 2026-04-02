@@ -4,6 +4,7 @@ import 'package:restaurantfinder/utils/app_colors.dart';
 import 'package:restaurantfinder/widgets/restaurant_menu_page.dart';
 
 typedef RestaurantSearchCallback = Future<List<Restaurant>> Function(String query);
+typedef RecommendationRequestCallback = Future<void> Function();
 
 class FindMenu extends StatefulWidget {
   const FindMenu({
@@ -11,6 +12,7 @@ class FindMenu extends StatefulWidget {
     required this.nearbyRestaurants,
     required this.recommendedRestaurants,
     required this.onSearch,
+    required this.onRequestRecommendation,
     super.key,
   });
 
@@ -18,6 +20,7 @@ class FindMenu extends StatefulWidget {
   final List<Restaurant> nearbyRestaurants;
   final List<Restaurant> recommendedRestaurants;
   final RestaurantSearchCallback onSearch;
+  final RecommendationRequestCallback onRequestRecommendation;
 
   @override
   State<FindMenu> createState() => _FindMenuState();
@@ -28,21 +31,7 @@ class _FindMenuState extends State<FindMenu> {
   bool isSearching = false;
   String currentQuery = '';
 
-  List<Restaurant> _sortedRestaurants(List<Restaurant> restaurants) {
-    final sorted = [...restaurants];
-    final hasDistance = sorted.any((restaurant) => restaurant.distanceMiles > 0);
-
-    if (hasDistance) {
-      sorted.sort((a, b) => a.distanceMiles.compareTo(b.distanceMiles));
-    } else {
-      sorted.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    }
-
-    return sorted;
-  }
-
   String _distanceText(Restaurant restaurant) {
-    if (restaurant.distanceMiles <= 0) return 'Distance unavailable';
     return '${restaurant.distanceMiles.toStringAsFixed(1)} mi away';
   }
 
@@ -61,7 +50,9 @@ class _FindMenuState extends State<FindMenu> {
         ),
         title: Text(restaurant.name, style: theme.textTheme.titleMedium),
         subtitle: Text(
-          '${restaurant.cuisine} • ${_distanceText(restaurant)}',
+          restaurant.distanceMiles > 0
+              ? '${restaurant.cuisine} • ${_distanceText(restaurant)}'
+              : restaurant.cuisine,
           style: theme.textTheme.bodyMedium,
         ),
         trailing: const Icon(Icons.chevron_right),
@@ -117,9 +108,9 @@ class _FindMenuState extends State<FindMenu> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final displayRestaurants = currentQuery.isEmpty
-      ? _sortedRestaurants(widget.nearbyRestaurants)
-      : _sortedRestaurants(searchResults);
-    final recommendedRestaurants = _sortedRestaurants(widget.recommendedRestaurants);
+      ? widget.nearbyRestaurants
+      : searchResults;
+    final recommendedRestaurants = widget.recommendedRestaurants;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
@@ -137,6 +128,15 @@ class _FindMenuState extends State<FindMenu> {
             hintText: 'Try a place name or type of food',
             leading: const Icon(Icons.search),
             onChanged: _handleSearch,
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.icon(
+              onPressed: widget.onRequestRecommendation,
+              icon: const Icon(Icons.restaurant_menu),
+              label: const Text('Give recomendation'),
+            ),
           ),
           const SizedBox(height: 20),
           Expanded(

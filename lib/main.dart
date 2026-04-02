@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:restaurantfinder/data/restaurant_data.dart';
 import 'package:restaurantfinder/data/user_preferences_repository.dart';
 import 'package:restaurantfinder/utils/app_colors.dart';
 import 'package:restaurantfinder/utils/API_endpoints.dart';
 import 'package:restaurantfinder/utils/menu_voice_context.dart';
+import 'package:restaurantfinder/utils/recommendation_voice_context.dart';
 import 'package:restaurantfinder/utils/permissions.dart';
 import 'package:restaurantfinder/utils/speech_assistant.dart';
 import 'package:restaurantfinder/widgets/allergy_dialog.dart';
 import 'package:restaurantfinder/widgets/find_menu.dart';
+import 'package:restaurantfinder/widgets/recommendation_dialog.dart';
 import 'package:restaurantfinder/widgets/restaurant_menu_page.dart';
 import 'package:restaurantfinder/widgets/settings_menu.dart';
 
@@ -89,6 +92,8 @@ class _NavigationExampleState extends State<NavigationExample> {
   late final SpeechAssistant voiceAssistant;
   AllergyDialogController? allergyDialogController;
   bool allergyDialogOpen = false;
+  RecommendationDialogController? recommendationDialogController;
+  bool recommendationDialogOpen = false;
 
   int tab = 0;
   bool checkingPerms = false;
@@ -103,10 +108,81 @@ class _NavigationExampleState extends State<NavigationExample> {
   Map<String, String> allergyList = {};
   String permStatus = 'Checking...';
   
-  // Restaurant data
+  Position? _lastKnownPosition;
+
   List<Restaurant> nearbyRestaurants = [];
   List<Restaurant> recommendedRestaurants = [];
   bool loadingRestaurants = true;
+
+  Future<Position?> _getCurrentPosition() async {
+    if (!location) return null;
+
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return null;
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      final granted = permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always;
+      if (!granted) return null;
+
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 6),
+        ),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<Restaurant> _withComputedDistances(
+    List<Restaurant> restaurants,
+    Position? position,
+  ) {
+    if (position == null) return restaurants;
+
+    return restaurants.map((restaurant) {
+      final lat = restaurant.latitude;
+      final lon = restaurant.longitude;
+      if (lat == null || lon == null) return restaurant;
+
+      final meters = Geolocator.distanceBetween(
+        position.latitude,
+        position.longitude,
+        lat,
+        lon,
+      );
+
+      return restaurant.copyWith(distanceMiles: meters / 1609.344);
+    }).toList();
+  }
+
+  int _compareByDistanceThenName(Restaurant a, Restaurant b) {
+    final aHasDistance = a.distanceMiles > 0;
+    final bHasDistance = b.distanceMiles > 0;
+
+    if (aHasDistance && bHasDistance) {
+      final byDistance = a.distanceMiles.compareTo(b.distanceMiles);
+      if (byDistance != 0) return byDistance;
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    }
+
+    if (aHasDistance) return -1;
+    if (bHasDistance) return 1;
+    return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+  }
+
+  List<Restaurant> _sortRestaurants(List<Restaurant> restaurants) {
+    final sorted = [...restaurants];
+    sorted.sort(_compareByDistanceThenName);
+    return sorted;
+  }
 
   @override
   void initState() {
@@ -190,47 +266,52 @@ class _NavigationExampleState extends State<NavigationExample> {
     );
   }
 
-  Future<void> _loadRestaurants() async {
+  Future<void> _loadRestaurants({Position? position}) async {
     try {
       setState(() => loadingRestaurants = true);
-      final data = await getRestaurants();
-      
+
+      // Start both in parallel — GPS timeout won't block or crash the restaurant fetch.
+      final dataFuture = getRestaurants();
+      final positionFuture = position != null
+          ? Future.value(position)
+          : _getCurrentPosition();
+
+      final data = await dataFuture;
       if (!mounted) return;
-      
-        final restaurants = data
+
+      final resolvedPosition = await positionFuture;
+      if (resolvedPosition != null) _lastKnownPosition = resolvedPosition;
+
+      final restaurants = data
           .map((item) => Restaurant.fromJson(
-            item is Map<String, dynamic> ? item : {}))
+                item is Map<String, dynamic> ? item : {}))
           .toList();
-      
-      final hasDistance = restaurants.any((r) => r.distanceMiles > 0);
-      if (location && hasDistance) {
-        restaurants.sort((a, b) => a.distanceMiles.compareTo(b.distanceMiles));
-      } else {
-        restaurants.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-      }
-      
+
+      final withComputedDistances =
+          _withComputedDistances(restaurants, _lastKnownPosition);
+      final sortedRestaurants = _sortRestaurants(withComputedDistances);
+
       setState(() {
-        nearbyRestaurants = restaurants.isEmpty ? defaultRestaurants : restaurants;
+        nearbyRestaurants = sortedRestaurants;
         loadingRestaurants = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        nearbyRestaurants = defaultRestaurants;
+        nearbyRestaurants = [];
         loadingRestaurants = false;
       });
       debugPrint('Error loading nearby restaurants: $e');
     }
   }
 
-  Future<void> _loadRecommendedRestaurants() async {
+  Future<void> _loadRecommendedRestaurants({Position? position}) async {
     try {
+      final resolvedPosition = position ?? _lastKnownPosition;
       final data = await getRecommendations(
-        cuisinePreferences: [],
-        dietaryRestrictions: [],
+        cuisinePreferences: const [],
+        dietaryRestrictions: const [],
         allergenExclusions: allergies,
-        spicePreference: 'mild',
-        pricePreference: 'cheap',
       );
       
       if (!mounted) return;
@@ -253,11 +334,108 @@ class _NavigationExampleState extends State<NavigationExample> {
           })
           .where((r) => r.id.isNotEmpty || r.name != 'Unknown')
           .toList();
+
+      final withDistances = _withComputedDistances(restaurants, resolvedPosition);
+      final sorted = _sortRestaurants(withDistances);
       
-      setState(() => recommendedRestaurants = restaurants);
+      setState(() => recommendedRestaurants = sorted);
     } catch (e) {
       debugPrint('Error loading recommended restaurants: $e');
       setState(() => recommendedRestaurants = []);
+    }
+  }
+
+  Restaurant? _restaurantFromRecommendationItem(dynamic item) {
+    if (item is! Map<String, dynamic>) return null;
+
+    final restaurantJson = item['restaurant'] is Map<String, dynamic>
+        ? item['restaurant'] as Map<String, dynamic>
+        : item;
+    final restaurant = Restaurant.fromJson(restaurantJson);
+    if (restaurant.id.isEmpty && restaurant.name == 'Unknown') {
+      return null;
+    }
+    return restaurant;
+  }
+
+  String? _extractSpokenReason(dynamic item) {
+    if (item is! Map<String, dynamic>) return null;
+    final reason = item['spoken_reason'];
+    if (reason is String && reason.isNotEmpty) {
+      debugPrint('Extracted spoken reason: $reason');
+      return reason;
+    }
+    return null;
+  }
+
+  Future<void> _giveRecommendation() async {
+    // Create controller for voice-controlled dialog
+    recommendationDialogController = RecommendationDialogController();
+    recommendationDialogOpen = true;
+
+    final request = await showRecommendationDialog(
+      context: context,
+      controller: recommendationDialogController,
+    );
+    
+    recommendationDialogOpen = false;
+    recommendationDialogController = null;
+    RecommendationVoiceContext.instance.clear();
+
+    if (!mounted || request == null) return;
+
+    try {
+      final data = await getRecommendations(
+        cuisinePreferences: request.cuisinePreferences,
+        dietaryRestrictions: request.dietaryRestrictions,
+        allergenExclusions: allergies,
+      );
+
+      if (!mounted) return;
+
+      var spokenReason = '';
+      final restaurants = <Restaurant>[];
+      
+      for (final item in data) {
+        final restaurant = _restaurantFromRecommendationItem(item);
+        if (restaurant != null) {
+          restaurants.add(restaurant);
+          if (spokenReason.isEmpty) {
+            final extractedReason = _extractSpokenReason(item);
+            if (extractedReason != null) {
+              spokenReason = extractedReason;
+            }
+          }
+        }
+      }
+
+      debugPrint('Final spoken reason to announce: "$spokenReason"');
+
+      if (restaurants.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No recommendation was returned.')),
+        );
+        return;
+      }
+
+      final recommended = restaurants.first;
+
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => RestaurantMenuPage(
+            restaurant: recommended,
+            userAllergies: allergies,
+            spokenReason: spokenReason.isNotEmpty ? spokenReason : null,
+            onAnnounce: (message) => _announce(message),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Recommendation failed: $e')),
+      );
     }
   }
 
@@ -265,6 +443,7 @@ class _NavigationExampleState extends State<NavigationExample> {
     try {
       final data = await getRestaurants();
       final normalized = query.toLowerCase().trim();
+      final position = await _getCurrentPosition();
 
       final restaurants = data
           .map((item) => Restaurant.fromJson(
@@ -272,17 +451,19 @@ class _NavigationExampleState extends State<NavigationExample> {
           .where((r) => r.id.isNotEmpty)
           .toList();
 
-      final nameMatches = restaurants
+      final withComputedDistances = _withComputedDistances(restaurants, position);
+
+      final nameMatches = withComputedDistances
           .where((r) => r.name.toLowerCase().contains(normalized))
           .toList();
       if (nameMatches.isNotEmpty) {
-        return nameMatches;
+        return _sortRestaurants(nameMatches);
       }
 
-      final cuisineMatches = restaurants
+      final cuisineMatches = withComputedDistances
           .where((r) => r.cuisine.toLowerCase().contains(normalized))
           .toList();
-      return cuisineMatches;
+      return _sortRestaurants(cuisineMatches);
     } catch (e) {
       debugPrint('Error searching restaurants: $e');
       return <Restaurant>[];
@@ -341,6 +522,7 @@ class _NavigationExampleState extends State<NavigationExample> {
   Future<void> _setLocation(bool value) async {
     setState(() => location = value);
     await _saveSettings();
+    await _loadRestaurants();
     await _announce('Location services ${value ? 'enabled' : 'disabled'}.');
   }
 
@@ -390,7 +572,16 @@ class _NavigationExampleState extends State<NavigationExample> {
       return;
     }
 
+    if (await _handleRecommendationVoiceCommand(command)) {
+      return;
+    }
+
     if (await _handleAllergyVoiceCommand(command)) {
+      return;
+    }
+
+    if (command == 'give recommendation' || command == 'give recomendation') {
+      await _giveRecommendation();
       return;
     }
 
@@ -403,7 +594,8 @@ class _NavigationExampleState extends State<NavigationExample> {
       await _announce(
         'You can say: go to find, go to settings, open allergies, add allergy name, remove allergy name, refresh permissions, '
         'turn on notifications, turn off location, toggle voice input, toggle search history, reset preferences, '
-        'open restaurant name, list restaurants, search restaurant name or cuisine, save allergies, or close menu.',
+        'open restaurant name, list restaurants, search restaurant name or cuisine, save allergies, give recommendation, '
+        'list cuisines, add cuisine name, add restriction name, or close menu.',
       );
       return;
     }
@@ -687,6 +879,80 @@ class _NavigationExampleState extends State<NavigationExample> {
     return true;
   }
 
+  Future<bool> _handleRecommendationVoiceCommand(String command) async {
+    if (!recommendationDialogOpen || recommendationDialogController == null) {
+      return false;
+    }
+
+    final recContext = RecommendationVoiceContext.instance;
+
+    if (command == 'submit recommendation' || command == 'submit recomendation' || command == 'submit') {
+      recommendationDialogController!.submit();
+      return true;
+    }
+
+    if (command == 'list cuisines') {
+      if (recContext.availableCuisines.isEmpty) {
+        await _announce('Cuisines are still loading.');
+        return true;
+      }
+      final cuisineList = recContext.availableCuisines.join(', ');
+      await _announce('Available cuisines: $cuisineList');
+      return true;
+    }
+
+    final addCuisineMatch = RegExp(r'^add\s+(.+)$').firstMatch(command);
+    if (addCuisineMatch != null) {
+      final cuisineName = addCuisineMatch.group(1)!.trim();
+      if (recContext.availableCuisines.isEmpty) {
+        await _announce('Cuisines are still loading.');
+        return true;
+      }
+
+      final normalized = cuisineName.toLowerCase();
+      final match = recContext.availableCuisines.firstWhere(
+        (c) => c.toLowerCase() == normalized,
+        orElse: () => '',
+      );
+
+      if (match.isEmpty) {
+        await _announce('Could not find cuisine $cuisineName.');
+        return true;
+      }
+
+      final success = recommendationDialogController!.addCuisine(match);
+      if (success) {
+        recContext.selectedCuisines.add(match);
+        await _announce('Added $match to cuisine preferences.');
+      } else {
+        await _announce('$match is already selected.');
+      }
+
+      return true;
+    }
+
+    final addRestrictionMatch = RegExp(r'^add\s+restriction\s+(.+)$').firstMatch(command);
+    if (addRestrictionMatch != null) {
+      final restriction = addRestrictionMatch.group(1)!.trim();
+      if (restriction.isEmpty) {
+        await _announce('Please say a dietary restriction.');
+        return true;
+      }
+
+      final success = recommendationDialogController!.addDietaryRestriction(restriction);
+      if (success) {
+        recContext.selectedDietaryRestrictions.add(restriction);
+        await _announce('Added $restriction to dietary restrictions.');
+      } else {
+        await _announce('$restriction is already selected.');
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
   Future<bool> _handleMenuVoiceCommand(String command) async {
     final menuContext = MenuVoiceContext.instance;
     if (!menuContext.isActive) return false;
@@ -782,7 +1048,12 @@ class _NavigationExampleState extends State<NavigationExample> {
       bottomNavigationBar: NavigationBar(
         height: 72,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        onDestinationSelected: (i) => setState(() => tab = i),
+        onDestinationSelected: (i) {
+          setState(() => tab = i);
+          if (i == 0) {
+            _loadRestaurants();
+          }
+        },
         indicatorColor: AppColors.Ocean,
         selectedIndex: tab,
         destinations: const [
@@ -807,6 +1078,7 @@ class _NavigationExampleState extends State<NavigationExample> {
             nearbyRestaurants: nearbyRestaurants,
             recommendedRestaurants: recommendedRestaurants,
             onSearch: _searchRestaurants,
+            onRequestRecommendation: _giveRecommendation,
           ),
           SettingsMenu(
             notificationsEnabled: notifications,

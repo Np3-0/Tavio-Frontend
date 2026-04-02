@@ -134,7 +134,11 @@ class SpeechAssistant {
       );
     }
 
-    if (!isVoiceEnabled()) return;
+    if (!isVoiceEnabled()) {
+      _speaking = false;
+      _suppressListening = false;
+      return;
+    }
 
     if (speech.isListening || _listening) {
       _ignoreNextSpeechError = true;

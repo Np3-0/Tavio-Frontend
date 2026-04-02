@@ -151,9 +151,6 @@ Future<List<dynamic>> getRecommendations({
   List<String> cuisinePreferences = const [],
   List<String> dietaryRestrictions = const [],
   List<String> allergenExclusions = const [],
-  String spicePreference = 'mild',
-  String pricePreference = 'cheap',
-  int maxTravelTimeMinutes = 0,
   List<String> preferredTags = const [],
 }) async {
   try {
@@ -161,9 +158,6 @@ Future<List<dynamic>> getRecommendations({
       'cuisine_preferences': cuisinePreferences,
       'dietary_restrictions': dietaryRestrictions,
       'allergen_exclusions': allergenExclusions,
-      'spice_preference': spicePreference,
-      'price_preference': pricePreference,
-      'max_travel_time_minutes': maxTravelTimeMinutes,
       'preferred_tags': preferredTags,
     };
 

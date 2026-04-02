@@ -36,12 +36,20 @@ double _parseDistanceValue(dynamic value) {
   return 0.0;
 }
 
+double? _parseCoordinateValue(dynamic value) {
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value);
+  return null;
+}
+
 class Restaurant {
   const Restaurant({
     required this.id,
     required this.name,
     required this.cuisine,
     required this.distanceMiles,
+    this.latitude,
+    this.longitude,
     this.menuItems = const [],
   });
 
@@ -49,6 +57,10 @@ class Restaurant {
     final rawId = json['id'];
     final rawDistanceMiles = json['distance_miles'] ?? json['distance'];
     final rawDistanceMeters = json['distance_meters'];
+    final latitude = _parseCoordinateValue(json['latitude'] ?? json['lat']);
+    final longitude = _parseCoordinateValue(
+      json['longitude'] ?? json['long'] ?? json['lng'] ?? json['lon'],
+    );
 
     double distanceMiles = 0.0;
     final parsedMiles = _parseDistanceValue(rawDistanceMiles);
@@ -64,6 +76,8 @@ class Restaurant {
       name: json['name'] as String? ?? 'Unknown',
       cuisine: (json['cuisine'] ?? json['cuisine_type'] ?? 'Unknown') as String,
       distanceMiles: distanceMiles,
+      latitude: latitude,
+      longitude: longitude,
     );
   }
 
@@ -71,14 +85,21 @@ class Restaurant {
   final String name;
   final String cuisine;
   final double distanceMiles;
+  final double? latitude;
+  final double? longitude;
   final List<RestaurantMenuItem> menuItems;
 
-  Restaurant copyWith({List<RestaurantMenuItem>? menuItems}) {
+  Restaurant copyWith({
+    List<RestaurantMenuItem>? menuItems,
+    double? distanceMiles,
+  }) {
     return Restaurant(
       id: id,
       name: name,
       cuisine: cuisine,
-      distanceMiles: distanceMiles,
+      distanceMiles: distanceMiles ?? this.distanceMiles,
+      latitude: latitude,
+      longitude: longitude,
       menuItems: menuItems ?? this.menuItems,
     );
   }
